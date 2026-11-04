@@ -37,6 +37,7 @@ static class ServiceCollectionExtensions
             services.AddSingleton<ICharacterSaveParser, CharacterSaveParser>();
             services.AddSingleton<ISaveFolderLoader, SaveFolderLoader>();
             services.AddSingleton<ICharacterSaveWriter, CharacterSaveWriter>();
+            services.AddSingleton<ICharacterSaveEditor, CharacterSaveEditor>();
 
             // Game data (%APPDATA%\GD.SaveEditor\database.db) built from the game's .arz / .arc files
             services.AddSingleton<IGameFileProvider, GameFileProvider>();

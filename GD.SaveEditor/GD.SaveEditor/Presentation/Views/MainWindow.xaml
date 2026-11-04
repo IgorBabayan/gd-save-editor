@@ -12,9 +12,9 @@
         xmlns:characterViews="clr-namespace:GD.SaveEditor.Presentation.Views.Characters"
         mc:Ignorable="d"
         d:DataContext="{d:DesignInstance Type=shellVm:MainViewModel, IsDesignTimeCreatable=False}"
-        Title="Grim Dawn Save Editor" Height="900" Width="1300"
-        MinWidth="900" MinHeight="560"
+        Title="Grim Dawn Save Editor" Height="940" Width="1150"
         WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
         Background="{DynamicResource WindowBackgroundBrush}"
         Foreground="{DynamicResource WindowForegroundBrush}">
 
@@ -378,7 +378,7 @@
                                Text="Characters"
                                Style="{StaticResource SectionHeaderTextStyle}" />
 
-                    <!-- Softcore / Hardcore tabs; each keeps its own selection and SSF filter. -->
+                    <!-- Softcore / Hardcore tabs; each keeps its own selection. -->
                     <TabControl Grid.Row="1"
                                 Margin="16,0"
                                 Style="{StaticResource PillTabControlStyle}"
@@ -387,25 +387,14 @@
                         <TabItem Header="Softcore">
                             <!-- Negative side margins undo the TabControl margin, so the list spans the whole panel. -->
                             <Grid Margin="-16,10,-16,0">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="*" />
-                                </Grid.RowDefinitions>
-
-                                <CheckBox Grid.Row="0"
-                                          Margin="16,0,16,8"
-                                          Content="Show only SSF characters"
-                                          IsChecked="{Binding ShowOnlySsfSoftcore, Mode=TwoWay}" />
-
-                                <ListBox Grid.Row="1"
-                                         Style="{StaticResource PlainListBoxStyle}"
+                                <ListBox Style="{StaticResource PlainListBoxStyle}"
                                          ItemContainerStyle="{StaticResource ListRowItemStyle}"
                                          ItemTemplate="{StaticResource CharacterListItemTemplate}"
                                          ItemsSource="{Binding SoftcoreCharacters}"
                                          SelectedItem="{Binding SelectedSoftcoreCharacter, Mode=TwoWay}"
                                          Visibility="{Binding HasVisibleSoftcoreCharacters, Converter={StaticResource BooleanToVisibilityConverter}}" />
 
-                                <TextBlock Grid.Row="1" Margin="16,8" VerticalAlignment="Top"
+                                <TextBlock Margin="16,8" VerticalAlignment="Top"
                                            Text="No softcore characters to show."
                                            TextWrapping="Wrap"
                                            Style="{StaticResource SecondaryTextStyle}"
@@ -416,25 +405,14 @@
                         <TabItem Header="Hardcore">
                             <!-- Negative side margins undo the TabControl margin, so the list spans the whole panel. -->
                             <Grid Margin="-16,10,-16,0">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="*" />
-                                </Grid.RowDefinitions>
-
-                                <CheckBox Grid.Row="0"
-                                          Margin="16,0,16,8"
-                                          Content="Show only SSF characters"
-                                          IsChecked="{Binding ShowOnlySsfHardcore, Mode=TwoWay}" />
-
-                                <ListBox Grid.Row="1"
-                                         Style="{StaticResource PlainListBoxStyle}"
+                                <ListBox Style="{StaticResource PlainListBoxStyle}"
                                          ItemContainerStyle="{StaticResource ListRowItemStyle}"
                                          ItemTemplate="{StaticResource CharacterListItemTemplate}"
                                          ItemsSource="{Binding HardcoreCharacters}"
                                          SelectedItem="{Binding SelectedHardcoreCharacter, Mode=TwoWay}"
                                          Visibility="{Binding HasVisibleHardcoreCharacters, Converter={StaticResource BooleanToVisibilityConverter}}" />
 
-                                <TextBlock Grid.Row="1" Margin="16,8" VerticalAlignment="Top"
+                                <TextBlock Margin="16,8" VerticalAlignment="Top"
                                            Text="No hardcore characters to show."
                                            TextWrapping="Wrap"
                                            Style="{StaticResource SecondaryTextStyle}"
@@ -498,7 +476,7 @@
                               ResizeBehavior="PreviousAndNext"
                               Background="Transparent" />
 
-                <!-- ===== Details of the selected character: Inventory / Waypoints tabs ===== -->
+                <!-- ===== Details of the selected character: Character / Waypoints tabs ===== -->
                 <Grid Grid.Column="2">
                     <TextBlock HorizontalAlignment="Center"
                                VerticalAlignment="Center"

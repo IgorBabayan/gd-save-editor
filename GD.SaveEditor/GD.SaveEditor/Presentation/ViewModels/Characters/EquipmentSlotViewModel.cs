@@ -27,19 +27,28 @@ public sealed record ItemTooltipLine(string Text, string Range = "", bool IsSkil
 /// <param name="Kind">"Component", "Augment".</param>
 public sealed record ItemTooltipSection(string Name, string Kind, ItemRarity Rarity, IReadOnlyList<ItemTooltipLine> Lines);
 
-/// <summary>One slot of the equipment screen: what it holds, its name, rarity and icon.</summary>
+/// <summary>
+/// One slot of the equipment screen, or an item in a bag: what it holds, its name, rarity, icon and tooltip.
+/// </summary>
 public sealed partial class EquipmentSlotViewModel : ViewModelBase
 {
     public EquipmentSlotViewModel(EquipmentSlot slot, int weaponSet, SaveItem? item)
+        : this(item, GetSlotLabel(slot))
     {
         Slot = slot;
         WeaponSet = weaponSet;
+    }
+
+    /// <summary>An item in a bag; <paramref name="label"/> is its type until the database tells the real one.</summary>
+    public EquipmentSlotViewModel(SaveItem? item, string label)
+    {
         Item = item is { IsEmpty: false } ? item : null;
-        Label = GetSlotLabel(slot);
+        Label = label;
         Name = Item is null ? Label : FallbackName(Item.BaseRecord);
     }
 
-    public EquipmentSlot Slot { get; }
+    /// <summary>The equipment slot; <c>null</c> for an item in a bag.</summary>
+    public EquipmentSlot? Slot { get; }
 
     /// <summary>1 or 2 for weapon slots, 0 for the others.</summary>
     public int WeaponSet { get; }
@@ -48,6 +57,9 @@ public sealed partial class EquipmentSlotViewModel : ViewModelBase
     public SaveItem? Item { get; }
 
     public bool IsEmpty => Item is null;
+
+    /// <summary>Size of the stack ("352") shown on a bag item; <c>null</c> for single items.</summary>
+    public string? QuantityText => Item is { Quantity: > 1 } stacked ? stacked.Quantity.ToString("N0") : null;
 
     /// <summary>Name of the slot ("Head", "Main hand", ...), shown in an empty slot.</summary>
     public string Label { get; }
@@ -183,8 +195,8 @@ public sealed partial class EquipmentSlotViewModel : ViewModelBase
         // These have no names in the game: listed only when the database does not know them.
         AddUnresolved(details, "Crafting bonus", modifier, item.ModifierRecord, hasName: false);
         AddUnresolved(details, "Completion bonus", completionBonus, item.CompletionBonusRecord, hasName: false);
-        if (item.StackCount > 1)
-            details.Add(new ItemDetailLine("Stack", item.StackCount.ToString()));
+        if (item.Quantity > 1)
+            details.Add(new ItemDetailLine("Stack", item.Quantity.ToString("N0")));
         details.Add(new ItemDetailLine("Record", item.BaseRecord));
         details.Add(new ItemDetailLine("Seed", item.Seed.ToString()));
 
@@ -403,6 +415,10 @@ public sealed partial class EquipmentSlotViewModel : ViewModelBase
         "WeaponMagical_Staff" => "Staff",
         "WeaponArmor_Shield" => "Shield",
         "WeaponArmor_Offhand" => "Off-Hand",
+        "QuestItem" => "Quest Item",
+        "ItemRelic" => "Component",
+        "ItemEnchantment" => "Augment",
+        "OneShot_Scroll" => "Scroll",
         _ => null
     };
 }

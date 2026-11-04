@@ -4,12 +4,359 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:inventoryVm="clr-namespace:GD.SaveEditor.Presentation.ViewModels.Inventory"
+             xmlns:charactersVm="clr-namespace:GD.SaveEditor.Presentation.ViewModels.Characters"
+             xmlns:wpf="clr-namespace:Material.Icons.WPF;assembly=Material.Icons.WPF"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=inventoryVm:InventoryViewModel, IsDesignTimeCreatable=False}"
-             d:DesignHeight="700" d:DesignWidth="900">
+             d:DesignHeight="400" d:DesignWidth="900">
 
-    <!-- Placeholder until the inventory editor is implemented. -->
-    <Border Margin="0,16,0,0" Style="{StaticResource InventorySectionBorderStyle}">
-        <TextBlock Style="{StaticResource EmptyPageTextStyle}" Text="The inventory editor is not available yet." />
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/GD.SaveEditor;component/Presentation/Views/Characters/ItemResources.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- Colors of the game's inventory: near-black cells with thin golden lines. -->
+            <SolidColorBrush x:Key="BagFrameBrush" Color="#5A4B2C" />
+            <SolidColorBrush x:Key="BagGoldBrush" Color="#D9B45A" />
+            <SolidColorBrush x:Key="BagHeaderBrush" Color="#221D17" />
+
+            <!-- One 32 x 32 cell, tiled over the bag. -->
+            <DrawingBrush x:Key="BagCellBrush"
+                          TileMode="Tile"
+                          Stretch="None"
+                          Viewbox="0,0,32,32" ViewboxUnits="Absolute"
+                          Viewport="0,0,32,32" ViewportUnits="Absolute">
+                <DrawingBrush.Drawing>
+                    <GeometryDrawing Brush="#0E0D0C">
+                        <GeometryDrawing.Pen>
+                            <Pen Brush="#3D3523" Thickness="1" />
+                        </GeometryDrawing.Pen>
+                        <GeometryDrawing.Geometry>
+                            <RectangleGeometry Rect="0,0,32,32" />
+                        </GeometryDrawing.Geometry>
+                    </GeometryDrawing>
+                </DrawingBrush.Drawing>
+            </DrawingBrush>
+
+            <!--
+                An item in a bag: icon over a glow of its rarity, the stack size in the bottom-right corner, the game's
+                tooltip. Without an icon (database or Items.arc missing) the item name is shown.
+            -->
+            <DataTemplate x:Key="BagItemTemplate" DataType="{x:Type charactersVm:EquipmentSlotViewModel}">
+                <Border x:Name="Frame"
+                        Margin="1"
+                        BorderThickness="1"
+                        BorderBrush="{Binding Rarity, Converter={StaticResource RarityBrush}}"
+                        Background="{Binding Rarity, Converter={StaticResource RarityBrush}, ConverterParameter=Glow}"
+                        SnapsToDevicePixels="True"
+                        ToolTip="{StaticResource ItemToolTip}"
+                        ToolTipService.InitialShowDelay="150"
+                        ToolTipService.ShowDuration="60000">
+                    <Grid ClipToBounds="True">
+                        <Image Source="{Binding Icon}"
+                               Stretch="Uniform"
+                               StretchDirection="DownOnly"
+                               RenderOptions.BitmapScalingMode="HighQuality"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+
+                        <TextBlock x:Name="NameText"
+                                   Text="{Binding Name}"
+                                   Visibility="Collapsed"
+                                   Margin="1"
+                                   FontSize="8"
+                                   TextAlignment="Center"
+                                   TextWrapping="Wrap"
+                                   TextTrimming="CharacterEllipsis"
+                                   VerticalAlignment="Center"
+                                   Foreground="{Binding Rarity, Converter={StaticResource RarityBrush}}" />
+
+                        <TextBlock Text="{Binding QuantityText}"
+                                   Margin="0,0,2,0"
+                                   FontSize="11"
+                                   FontWeight="SemiBold"
+                                   HorizontalAlignment="Right"
+                                   VerticalAlignment="Bottom"
+                                   Foreground="White"
+                                   Style="{StaticResource OptionalTooltipText}">
+                            <TextBlock.Effect>
+                                <DropShadowEffect BlurRadius="2" ShadowDepth="1" Opacity="1" Color="Black" />
+                            </TextBlock.Effect>
+                        </TextBlock>
+                    </Grid>
+                </Border>
+                <DataTemplate.Triggers>
+                    <DataTrigger Binding="{Binding HasIcon}" Value="False">
+                        <Setter TargetName="NameText" Property="Visibility" Value="Visible" />
+                    </DataTrigger>
+                </DataTemplate.Triggers>
+            </DataTemplate>
+
+            <!-- A bag: the cell grid with its items placed on it by cell. -->
+            <DataTemplate x:Key="BagGridTemplate" DataType="{x:Type inventoryVm:InventoryBagViewModel}">
+                <Border HorizontalAlignment="Left"
+                        VerticalAlignment="Top"
+                        BorderThickness="1"
+                        BorderBrush="{StaticResource BagFrameBrush}"
+                        SnapsToDevicePixels="True">
+                    <Grid Width="{Binding PixelWidth}"
+                          Height="{Binding PixelHeight}"
+                          Background="{StaticResource BagCellBrush}">
+                        <ItemsControl ItemsSource="{Binding Items}" Focusable="False">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <Canvas />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemContainerStyle>
+                                <Style TargetType="ContentPresenter">
+                                    <Setter Property="Canvas.Left" Value="{Binding Left}" />
+                                    <Setter Property="Canvas.Top" Value="{Binding Top}" />
+                                </Style>
+                            </ItemsControl.ItemContainerStyle>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type inventoryVm:InventoryItemViewModel}">
+                                    <ContentControl Width="{Binding Width}"
+                                                    Height="{Binding Height}"
+                                                    Focusable="False"
+                                                    Content="{Binding Item}"
+                                                    ContentTemplate="{StaticResource BagItemTemplate}" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Text="Empty"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   FontSize="12"
+                                   Foreground="{StaticResource SlotLabelBrush}"
+                                   IsHitTestVisible="False"
+                                   Visibility="{Binding IsEmpty, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                    </Grid>
+                </Border>
+            </DataTemplate>
+
+            <!-- Tab buttons of the bags beside the main bag: a bag icon with its number, gold when shown. -->
+            <Style x:Key="BagTabItemStyle" TargetType="ListBoxItem">
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                <Setter Property="ToolTip" Value="{Binding Summary}" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ListBoxItem">
+                            <Border x:Name="Bd"
+                                    Width="34" Height="30"
+                                    Margin="3,0,0,0"
+                                    CornerRadius="3"
+                                    BorderThickness="1"
+                                    BorderBrush="{StaticResource SlotBorderBrush}"
+                                    Background="{StaticResource SlotBackgroundBrush}"
+                                    SnapsToDevicePixels="True">
+                                <Grid>
+                                    <wpf:MaterialIcon x:Name="BagIcon"
+                                                      Kind="BagPersonalOutline"
+                                                      Width="18" Height="18"
+                                                      Foreground="{StaticResource DollSecondaryTextBrush}" />
+                                    <TextBlock Text="{Binding Number}"
+                                               Margin="0,0,3,1"
+                                               FontSize="9"
+                                               FontWeight="SemiBold"
+                                               HorizontalAlignment="Right"
+                                               VerticalAlignment="Bottom"
+                                               Foreground="{StaticResource DollTextBrush}" />
+                                </Grid>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <DataTrigger Binding="{Binding IsEmpty}" Value="False">
+                                    <Setter TargetName="BagIcon" Property="Kind" Value="BagPersonal" />
+                                </DataTrigger>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource BagFrameBrush}" />
+                                </Trigger>
+                                <Trigger Property="IsSelected" Value="True">
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource BagGoldBrush}" />
+                                    <Setter TargetName="BagIcon" Property="Foreground" Value="{StaticResource BagGoldBrush}" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- Iron bits field: black box with the amount right-aligned, like the game's. -->
+            <Style x:Key="MoneyTextBoxStyle" TargetType="TextBox">
+                <Setter Property="Width" Value="150" />
+                <Setter Property="Height" Value="26" />
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="TextAlignment" Value="Right" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="Foreground" Value="{StaticResource DollTextBrush}" />
+                <Setter Property="CaretBrush" Value="{StaticResource DollTextBrush}" />
+                <Setter Property="SelectionBrush" Value="{StaticResource BagGoldBrush}" />
+                <Setter Property="BorderBrush" Value="{StaticResource BagFrameBrush}" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="TextBox">
+                            <Border x:Name="Bd"
+                                    CornerRadius="2"
+                                    Padding="6,0"
+                                    BorderThickness="1"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    Background="#050505"
+                                    SnapsToDevicePixels="True">
+                                <ScrollViewer x:Name="PART_ContentHost"
+                                              Focusable="False"
+                                              VerticalAlignment="Center"
+                                              HorizontalScrollBarVisibility="Hidden"
+                                              VerticalScrollBarVisibility="Hidden" />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsKeyboardFocused" Value="True">
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource BagGoldBrush}" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding IsMoneyChanged}" Value="True">
+                        <Setter Property="Foreground" Value="{StaticResource BagGoldBrush}" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding HasMoneyError}" Value="True">
+                        <Setter Property="BorderBrush" Value="{DynamicResource ErrorForegroundBrush}" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding IsMoneyReadOnly}" Value="True">
+                        <Setter Property="Foreground" Value="{StaticResource DollSecondaryTextBrush}" />
+                        <Setter Property="Cursor" Value="Arrow" />
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <!-- The bags under the equipment, like the game's inventory screen. -->
+    <Border Margin="0,0,0,16"
+            Padding="14"
+            HorizontalAlignment="Left"
+            CornerRadius="6"
+            BorderThickness="1"
+            BorderBrush="{DynamicResource ControlBorderBrush}"
+            Background="{StaticResource DollBackgroundBrush}">
+        <StackPanel>
+            <!-- The bags could not be read (the reason is shown above the equipment). -->
+            <TextBlock Margin="0,0,0,10"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource WarningForegroundBrush}"
+                       Text="The bags could not be read from the save file."
+                       Visibility="{Binding HasInventory, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
+
+            <WrapPanel Orientation="Horizontal">
+
+                <!-- ===== Main bag with the iron bits above it ===== -->
+                <StackPanel Margin="0,0,16,0">
+                    <Border Height="38"
+                            Margin="0,0,0,6"
+                            Padding="8,0,6,0"
+                            CornerRadius="3"
+                            Background="{StaticResource BagHeaderBrush}">
+                        <DockPanel LastChildFill="False" VerticalAlignment="Center">
+                            <TextBlock DockPanel.Dock="Left"
+                                       Text="Inventory"
+                                       FontSize="14"
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center"
+                                       Foreground="{StaticResource DollTextBrush}" />
+
+                            <StackPanel DockPanel.Dock="Right"
+                                        Orientation="Horizontal"
+                                        VerticalAlignment="Center"
+                                        Visibility="{Binding HasMoney, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <!-- Puts the amount of the save file back (shown while it is changed). -->
+                                <Button Margin="0,0,6,0"
+                                        Style="{StaticResource SubtleIconButtonStyle}"
+                                        ToolTip="Undo the change (Esc)"
+                                        Command="{Binding ResetMoneyCommand}"
+                                        Visibility="{Binding IsMoneyChanged, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                    <wpf:MaterialIcon Kind="Undo" Width="16" Height="16" Foreground="{StaticResource BagGoldBrush}" />
+                                </Button>
+                                <TextBox x:Name="MoneyBox"
+                                         Style="{StaticResource MoneyTextBoxStyle}"
+                                         AutomationProperties.Name="Iron bits"
+                                         Text="{Binding MoneyText, UpdateSourceTrigger=PropertyChanged}"
+                                         IsReadOnly="{Binding IsMoneyReadOnly, Mode=OneWay}"
+                                         ToolTip="{Binding MoneyToolTip}"
+                                         LostKeyboardFocus="OnMoneyLostKeyboardFocus"
+                                         PreviewKeyDown="OnMoneyPreviewKeyDown" />
+                                <wpf:MaterialIcon Kind="CashMultiple"
+                                                  Width="20" Height="20"
+                                                  Margin="6,0,0,0"
+                                                  ToolTip="Iron bits"
+                                                  Foreground="#C8CCD2" />
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+
+                    <TextBlock Margin="0,0,0,6"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               HorizontalAlignment="Right"
+                               Text="{Binding MoneyError}"
+                               Foreground="{DynamicResource ErrorForegroundBrush}"
+                               Visibility="{Binding HasMoneyError, Converter={StaticResource BooleanToVisibilityConverter}}" />
+
+                    <ContentControl Focusable="False"
+                                    Content="{Binding MainBag}"
+                                    ContentTemplate="{StaticResource BagGridTemplate}" />
+                </StackPanel>
+
+                <!-- ===== Other bags: tab buttons, then the selected bag ===== -->
+                <StackPanel Visibility="{Binding HasBags, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <Border Height="38"
+                            Margin="0,0,0,6"
+                            Padding="8,0,4,0"
+                            CornerRadius="3"
+                            Background="{StaticResource BagHeaderBrush}">
+                        <DockPanel LastChildFill="False" VerticalAlignment="Center">
+                            <TextBlock DockPanel.Dock="Left"
+                                       Margin="0,0,12,0"
+                                       Text="{Binding SelectedBag.Name}"
+                                       FontSize="14"
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center"
+                                       Foreground="{StaticResource DollTextBrush}" />
+                            <ListBox DockPanel.Dock="Right"
+                                     ItemsSource="{Binding Bags}"
+                                     SelectedItem="{Binding SelectedBag, Mode=TwoWay}"
+                                     ItemContainerStyle="{StaticResource BagTabItemStyle}"
+                                     Background="Transparent"
+                                     BorderThickness="0"
+                                     Padding="0"
+                                     VerticalAlignment="Center"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                     ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                     AutomationProperties.Name="Bags">
+                                <ListBox.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ListBox.ItemsPanel>
+                            </ListBox>
+                        </DockPanel>
+                    </Border>
+
+                    <ContentControl Focusable="False"
+                                    Content="{Binding SelectedBag}"
+                                    ContentTemplate="{StaticResource BagGridTemplate}" />
+                </StackPanel>
+            </WrapPanel>
+
+            <TextBlock Margin="0,8,0,0"
+                       FontSize="11"
+                       Text="Reading item names and icons…"
+                       Foreground="{StaticResource DollSecondaryTextBrush}"
+                       Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}" />
+        </StackPanel>
     </Border>
 </UserControl>

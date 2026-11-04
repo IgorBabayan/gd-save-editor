@@ -51,6 +51,12 @@ public sealed record SaveItem(
     public IReadOnlyList<uint> ExtraFields { get; init; } = [];
 
     public bool IsEmpty => string.IsNullOrEmpty(BaseRecord);
+
+    /// <summary>
+    /// How many items the stack holds. Version 11 inventories keep the count in the second extra field (1 for gear,
+    /// 352 for a stack of dynamite) and leave <see cref="StackCount"/> at 0; older ones use <see cref="StackCount"/>.
+    /// </summary>
+    public uint Quantity => ExtraFields.Count >= 2 ? ExtraFields[1] : StackCount;
 }
 
 /// <summary>An item in an equipment slot.</summary>
@@ -66,6 +72,19 @@ public sealed record CharacterEquipment(IReadOnlyList<EquippedItem> Items, int A
     public SaveItem? Get(EquipmentSlot slot, int weaponSet = 0) =>
         Items.FirstOrDefault(i => i.Slot == slot && i.WeaponSet == weaponSet)?.Item;
 }
+
+/// <summary>An item in a bag, at its top-left cell.</summary>
+public sealed record InventoryItem(SaveItem Item, int X, int Y);
+
+/// <summary>One bag of the inventory with the items in it.</summary>
+public sealed record InventoryBag(IReadOnlyList<InventoryItem> Items);
+
+/// <summary>
+/// The bags of the character, read from the inventory block of <c>player.gdc</c>: the main bag first, then the bags
+/// picked from the tabs beside it.
+/// </summary>
+/// <param name="SelectedBag">Bag the game shows beside the main bag.</param>
+public sealed record CharacterInventory(IReadOnlyList<InventoryBag> Bags, int FocusedBag, int SelectedBag);
 
 /// <summary>Character progress from the "bio" block of <c>player.gdc</c>.</summary>
 /// <param name="AttributePoints">Unspent attribute points.</param>

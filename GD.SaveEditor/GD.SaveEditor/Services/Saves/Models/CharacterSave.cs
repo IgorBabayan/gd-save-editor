@@ -40,6 +40,20 @@ public sealed record CharacterSave
     /// <summary>Equipped items; <c>null</c> when that part of the file could not be read (see <see cref="DetailsError"/>).</summary>
     public CharacterEquipment? Equipment { get; init; }
 
+    /// <summary>Items in the bags; <c>null</c> when that part of the file could not be read (see <see cref="DetailsError"/>).</summary>
+    public CharacterInventory? Inventory { get; init; }
+
+    /// <summary>Iron bits the character carries; <c>null</c> when that part of the file could not be read.</summary>
+    public uint? Money { get; init; }
+
+    /// <summary>
+    /// Why the editor cannot write changes into this file (a part of it has a layout the editor does not know);
+    /// <c>null</c> when it can.
+    /// </summary>
+    public string? RewriteError { get; init; }
+
+    public bool CanRewrite => RewriteError is null;
+
     /// <summary>
     /// Why the part after the header (stats, equipment) could not be read; <c>null</c> when it was read.
     /// The character is still listed and can be opened.

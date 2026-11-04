@@ -48,10 +48,10 @@ public partial class MainViewModel(
     /// <summary>Characters of the selected save folder, by name.</summary>
     public ObservableCollection<CharacterSave> Characters { get; } = [];
 
-    /// <summary>Softcore characters shown in the Softcore tab (after the SSF filter).</summary>
+    /// <summary>Softcore characters shown in the Softcore tab.</summary>
     public ObservableCollection<CharacterSave> SoftcoreCharacters { get; } = [];
 
-    /// <summary>Hardcore characters shown in the Hardcore tab (after the SSF filter).</summary>
+    /// <summary>Hardcore characters shown in the Hardcore tab.</summary>
     public ObservableCollection<CharacterSave> HardcoreCharacters { get; } = [];
 
     /// <summary>Character files that could not be read.</summary>
@@ -69,19 +69,11 @@ public partial class MainViewModel(
     [ObservableProperty]
     private CharacterSave? _selectedHardcoreCharacter;
 
-    /// <summary>"Show only SSF characters" checkbox of the Softcore tab.</summary>
-    [ObservableProperty]
-    private bool _showOnlySsfSoftcore;
-
-    /// <summary>"Show only SSF characters" checkbox of the Hardcore tab.</summary>
-    [ObservableProperty]
-    private bool _showOnlySsfHardcore;
-
     /// <summary>Selected character of the open tab; its details are shown on the right.</summary>
     public CharacterSave? SelectedCharacter =>
         SelectedCharacterTabIndex == HardcoreTabIndex ? SelectedHardcoreCharacter : SelectedSoftcoreCharacter;
 
-    /// <summary>Details (Character / Inventory / Waypoints tabs) of <see cref="SelectedCharacter"/>; <c>null</c> when nothing is selected.</summary>
+    /// <summary>Details (Character / Waypoints tabs) of <see cref="SelectedCharacter"/>; <c>null</c> when nothing is selected.</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
     [NotifyCanExecuteChangedFor(nameof(ReloadCommand))]
@@ -133,10 +125,6 @@ public partial class MainViewModel(
             UpdateSelectedCharacter();
     }
 
-    partial void OnShowOnlySsfSoftcoreChanged(bool value) => RefreshCharacterLists();
-
-    partial void OnShowOnlySsfHardcoreChanged(bool value) => RefreshCharacterLists();
-
     /// <summary>Recreates <see cref="CharacterDetails"/> when the selected character of the open tab changes.</summary>
     private void UpdateSelectedCharacter()
     {
@@ -153,7 +141,7 @@ public partial class MainViewModel(
     }
 
     /// <summary>
-    /// Splits <see cref="Characters"/> into the Softcore / Hardcore tabs, applying each tab's SSF filter.
+    /// Splits <see cref="Characters"/> into the Softcore / Hardcore tabs.
     /// Each tab keeps its selected character if it is still listed, otherwise its first character is selected.
     /// </summary>
     private void RefreshCharacterLists()
@@ -164,8 +152,8 @@ public partial class MainViewModel(
         _isRefreshingLists = true;
         try
         {
-            Replace(SoftcoreCharacters, Characters.Where(c => !c.Hardcore && (!ShowOnlySsfSoftcore || c.SoloSelfFound)));
-            Replace(HardcoreCharacters, Characters.Where(c => c.Hardcore && (!ShowOnlySsfHardcore || c.SoloSelfFound)));
+            Replace(SoftcoreCharacters, Characters.Where(c => !c.Hardcore));
+            Replace(HardcoreCharacters, Characters.Where(c => c.Hardcore));
 
             SelectedSoftcoreCharacter = FindByPath(SoftcoreCharacters, previousSoftcore) ?? SoftcoreCharacters.FirstOrDefault();
             SelectedHardcoreCharacter = FindByPath(HardcoreCharacters, previousHardcore) ?? HardcoreCharacters.FirstOrDefault();
