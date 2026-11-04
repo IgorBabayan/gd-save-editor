@@ -100,7 +100,8 @@
             <!--
                 A bag: the cell grid with its items placed on it by cell. Items are dragged by the mouse; while one is
                 over the bag, the cells it would cover are shown green (it fits) or red (outside the bag or over
-                another item).
+                another item). A right-click offers to add an item at the cell, or to change or remove the item under
+                the mouse; a double-click on an item opens it in the item builder.
             -->
             <DataTemplate x:Key="BagGridTemplate" DataType="{x:Type inventoryVm:InventoryBagViewModel}">
                 <Border HorizontalAlignment="Left"
@@ -114,7 +115,8 @@
                           AllowDrop="True"
                           DragOver="OnBagDragOver"
                           DragLeave="OnBagDragLeave"
-                          Drop="OnBagDrop">
+                          Drop="OnBagDrop"
+                          MouseRightButtonUp="OnBagMouseRightButtonUp">
                         <ItemsControl ItemsSource="{Binding Items}" Focusable="False">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
@@ -137,7 +139,8 @@
                                                     ContentTemplate="{StaticResource BagItemTemplate}"
                                                     PreviewMouseLeftButtonDown="OnItemMouseDown"
                                                     PreviewMouseLeftButtonUp="OnItemMouseUp"
-                                                    PreviewMouseMove="OnItemMouseMove" />
+                                                    PreviewMouseMove="OnItemMouseMove"
+                                                    MouseDoubleClick="OnItemDoubleClick" />
                                     <DataTemplate.Triggers>
                                         <DataTrigger Binding="{Binding IsSizeKnown}" Value="True">
                                             <Setter TargetName="ItemHost" Property="Cursor" Value="Hand" />
@@ -321,13 +324,25 @@
                                        VerticalAlignment="Center"
                                        Foreground="{StaticResource DollTextBrush}" />
 
-                            <!-- Puts every moved item back where the save file has it (shown while items are moved). -->
+                            <!-- Makes a new item in the item builder and puts it at the first free cell. -->
                             <Button DockPanel.Dock="Left"
                                     Margin="8,0,0,0"
                                     Style="{StaticResource SubtleIconButtonStyle}"
-                                    ToolTip="Put the moved items back"
-                                    Command="{Binding ResetArrangementCommand}"
-                                    Visibility="{Binding IsArrangementChanged, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                    ToolTip="Add an item (right-click a cell to put it there)"
+                                    AutomationProperties.Name="Add item"
+                                    Command="{Binding NewItemCommand}"
+                                    Visibility="{Binding CanEditItems, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <wpf:MaterialIcon Kind="PlusBoxOutline" Width="18" Height="18" Foreground="{StaticResource BagGoldBrush}" />
+                            </Button>
+
+                            <!-- Puts the bags back as the save file has them (shown while something in them changed). -->
+                            <Button DockPanel.Dock="Left"
+                                    Margin="4,0,0,0"
+                                    Style="{StaticResource SubtleIconButtonStyle}"
+                                    ToolTip="Undo all changes to the bags (moved, added, changed and removed items)"
+                                    AutomationProperties.Name="Undo bag changes"
+                                    Command="{Binding ResetBagsCommand}"
+                                    Visibility="{Binding AreBagsChanged, Converter={StaticResource BooleanToVisibilityConverter}}">
                                 <wpf:MaterialIcon Kind="Undo" Width="16" Height="16" Foreground="{StaticResource BagGoldBrush}" />
                             </Button>
 
@@ -413,6 +428,15 @@
                                     ContentTemplate="{StaticResource BagGridTemplate}" />
                 </StackPanel>
             </WrapPanel>
+
+            <TextBlock Margin="0,8,0,0"
+                       MaxWidth="700"
+                       HorizontalAlignment="Left"
+                       FontSize="11"
+                       TextWrapping="Wrap"
+                       Text="{Binding StatusMessage}"
+                       Foreground="{DynamicResource WarningForegroundBrush}"
+                       Visibility="{Binding HasStatusMessage, Converter={StaticResource BooleanToVisibilityConverter}}" />
 
             <TextBlock Margin="0,8,0,0"
                        MaxWidth="700"

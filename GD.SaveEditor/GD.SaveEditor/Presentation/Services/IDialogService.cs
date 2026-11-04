@@ -1,6 +1,13 @@
+using GD.SaveEditor.Presentation.ViewModels.Inventory;
 using GD.SaveEditor.Services.GameData;
+using GD.SaveEditor.Services.Saves.Models;
 
 namespace GD.SaveEditor.Presentation.Services;
+
+/// <summary>What the item builder ended with.</summary>
+/// <param name="Item">The built item; <c>null</c> when nothing is to be put in the bag (cancelled or removed).</param>
+/// <param name="Removed">The user removed the edited item.</param>
+public sealed record ItemBuilderResult(BuiltItem? Item, bool Removed);
 
 public interface IDialogService
 {
@@ -18,4 +25,9 @@ public interface IDialogService
     /// </summary>
     /// <returns>The generator's outcome, or <c>null</c> if it did not finish.</returns>
     DatabaseGenerationResult? ShowDatabaseGenerator();
+
+    /// <summary>
+    /// Shows the modal item builder for a new bag item (<paramref name="current"/> <c>null</c>) or to change one.
+    /// </summary>
+    ItemBuilderResult ShowItemBuilder(SaveItem? current);
 }

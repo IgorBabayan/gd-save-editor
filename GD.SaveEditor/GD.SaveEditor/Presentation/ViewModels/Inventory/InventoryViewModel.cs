@@ -1,5 +1,7 @@
 using System.Globalization;
 using System.Text;
+using GD.SaveEditor.Presentation.Services;
+using GD.SaveEditor.Presentation.ViewModels.Characters;
 using GD.SaveEditor.Services.GameData.Database;
 using GD.SaveEditor.Services.GameData.Textures;
 using GD.SaveEditor.Services.Saves;
@@ -9,8 +11,8 @@ namespace GD.SaveEditor.Presentation.ViewModels.Inventory;
 
 /// <summary>
 /// The inventory shown under the equipment, laid out like the game's: the main bag on the left with the iron bits
-/// above it, the other bags on the right behind their tab buttons. The iron bits can be changed, and items can be
-/// dragged to another place in their bag or into another bag.
+/// above it, the other bags on the right behind their tab buttons. The iron bits can be changed; items can be dragged
+/// to another place in their bag or into another bag, made in the item builder, changed there, or removed.
 /// </summary>
 public sealed partial class InventoryViewModel : ViewModelBase
 {
@@ -24,12 +26,17 @@ public sealed partial class InventoryViewModel : ViewModelBase
 
     private readonly IGameItemProvider _items;
     private readonly IGameIconProvider _icons;
+    private readonly IDialogService _dialogs;
 
-    public InventoryViewModel(CharacterSave character, IGameItemProvider items, IGameIconProvider icons)
+    /// <summary>Items of the save file that were removed, to put them back with <see cref="ResetBagsCommand"/>.</summary>
+    private readonly List<(InventoryItemViewModel Item, InventoryBagViewModel Bag)> _removed = [];
+
+    public InventoryViewModel(CharacterSave character, IGameItemProvider items, IGameIconProvider icons, IDialogService dialogs)
     {
         Character = character;
         _items = items;
         _icons = icons;
+        _dialogs = dialogs;
 
         var bags = character.Inventory?.Bags ?? [];
         MainBag = new InventoryBagViewModel(0, "Main bag", MainBagColumns, MainBagRows, bags.Count > 0 ? bags[0].Items : []);
@@ -62,7 +69,7 @@ public sealed partial class InventoryViewModel : ViewModelBase
     private bool _isLoading;
 
     /// <summary>Something was changed that is not written to the save file yet.</summary>
-    public bool HasChanges => IsMoneyChanged || IsArrangementChanged;
+    public bool HasChanges => IsMoneyChanged || AreBagsChanged;
 
     #region Moving items
 
@@ -71,13 +78,19 @@ public sealed partial class InventoryViewModel : ViewModelBase
 
     private IEnumerable<InventoryItemViewModel> AllItems => AllBags.SelectMany(b => b.Items);
 
-    /// <summary>Items can be moved: the bags were read and the editor can write the save file back.</summary>
-    public bool CanMoveItems => HasInventory && Character.CanRewrite;
+    /// <summary>
+    /// Items can be moved, added, changed and removed: the bags were read (the file has at least one) and the editor can
+    /// write the save file back.
+    /// </summary>
+    public bool CanMoveItems => HasInventory && Character.CanRewrite && Character.Inventory?.Bags.Count > 0;
+
+    /// <summary>Same as <see cref="CanMoveItems"/>, for the "Add item" button and the bag menus.</summary>
+    public bool CanEditItems => CanMoveItems;
 
     /// <summary>Why items cannot be moved (or some of them); <c>null</c> when they all can.</summary>
     public string? MoveHint =>
         !HasInventory || IsLoading ? null
-        : !Character.CanRewrite ? $"Items cannot be moved for this character: {Character.RewriteError}"
+        : !Character.CanRewrite ? $"Items cannot be moved, added or changed for this character: {Character.RewriteError}"
         : AllItems.Any(i => !i.IsSizeKnown)
             ? "Items without an icon cannot be moved: their size comes from the icon. Generate the game database (database button in the title bar) to move them."
             : null;
@@ -105,26 +118,38 @@ public sealed partial class InventoryViewModel : ViewModelBase
 
         item.X = x;
         item.Y = y;
-        OnArrangementChanged();
+        OnBagsChanged();
         return true;
     }
 
-    /// <summary>Some item is in another bag or cell than in the save file.</summary>
-    public bool IsArrangementChanged =>
-        AllBags.Any(b => b.Items.Any(i => i.FromBag != b.Index || i.X != i.OriginalX || i.Y != i.OriginalY));
+    /// <summary>
+    /// Something in the bags differs from the save file: an item was moved, added, changed in the item builder or
+    /// removed.
+    /// </summary>
+    public bool AreBagsChanged =>
+        _removed.Count > 0
+        || AllBags.Any(b => b.Items.Any(i => i.IsNew || i.IsEdited || i.FromBag != b.Index || i.X != i.OriginalX || i.Y != i.OriginalY));
 
     /// <summary>
-    /// The contents of every bag to write into the save file; <c>null</c> when no item was moved. Items that stayed in
-    /// their bag keep their order, items moved in come after them.
+    /// The contents of every bag to write into the save file; <c>null</c> when the bags are as in the file. Items that
+    /// stayed in their bag keep their order, items moved or added come after them; removed items are left out. A new or
+    /// changed item carries its contents, an unchanged one only its cell.
     /// </summary>
-    public IReadOnlyList<IReadOnlyList<PlacedItem>>? ChangedBags => IsArrangementChanged
-        ? AllBags.Select(b => (IReadOnlyList<PlacedItem>)b.Items.Select(i => new PlacedItem(i.FromBag, i.FromIndex, i.X, i.Y)).ToList()).ToList()
+    public IReadOnlyList<IReadOnlyList<PlacedItem>>? ChangedBags => AreBagsChanged
+        ? AllBags.Select(b => (IReadOnlyList<PlacedItem>)b.Items
+                .Select(i => new PlacedItem(i.FromBag, i.FromIndex, i.X, i.Y, i.IsNew || i.IsEdited ? i.CurrentItem : null))
+                .ToList())
+            .ToList()
         : null;
 
-    /// <summary>Puts every item back where the save file has it.</summary>
+    /// <summary>Puts the bags back as the save file has them: moved items return, new ones go, changed and removed ones come back.</summary>
     [RelayCommand]
-    private void ResetArrangement()
+    private void ResetBags()
     {
+        foreach (var (item, bag) in _removed)
+            bag.Add(item);
+        _removed.Clear();
+
         var items = AllItems.ToList();
         foreach (var bag in AllBags)
         {
@@ -132,20 +157,163 @@ public sealed partial class InventoryViewModel : ViewModelBase
                 bag.Remove(item);
         }
 
-        foreach (var item in items.OrderBy(i => i.FromBag).ThenBy(i => i.FromIndex))
+        foreach (var item in items.Where(i => !i.IsNew).OrderBy(i => i.FromBag).ThenBy(i => i.FromIndex))
         {
+            item.Revert();
             item.X = item.OriginalX;
             item.Y = item.OriginalY;
             AllBags.First(b => b.Index == item.FromBag).Add(item);
         }
 
-        OnArrangementChanged();
+        StatusMessage = null;
+        OnBagsChanged();
     }
 
-    private void OnArrangementChanged()
+    private void OnBagsChanged()
     {
-        OnPropertyChanged(nameof(IsArrangementChanged));
+        OnPropertyChanged(nameof(AreBagsChanged));
         OnPropertyChanged(nameof(HasChanges));
+        OnPropertyChanged(nameof(MoveHint));
+        OnPropertyChanged(nameof(HasMoveHint));
+    }
+
+    #endregion
+
+    #region Adding, changing and removing items
+
+    /// <summary>What the last add / change could not do (no room in the bags); <c>null</c> when it worked.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasStatusMessage))]
+    private string? _statusMessage;
+
+    public bool HasStatusMessage => StatusMessage is not null;
+
+    /// <summary>"Add item" button: a new item at the first free cell of the main bag, then of the other bags.</summary>
+    [RelayCommand]
+    private void NewItem() => AddItem(MainBag, null);
+
+    /// <summary>
+    /// Opens the item builder for a new item and puts it on <paramref name="bag"/>: at <paramref name="cell"/> when it
+    /// fits there, otherwise at the first free cell of that bag, then of the other bags.
+    /// </summary>
+    public void AddItem(InventoryBagViewModel bag, (int X, int Y)? cell)
+    {
+        if (!CanEditItems)
+            return;
+
+        StatusMessage = null;
+        if (_dialogs.ShowItemBuilder(null).Item is not { } built)
+            return;
+
+        if (FindPlace(built.Columns, built.Rows, bag, cell, ignore: null) is not { } place)
+        {
+            StatusMessage = $"There is no free room of {built.Columns} x {built.Rows} cells in the bags for the new item. Make room and add it again.";
+            return;
+        }
+
+        var item = new InventoryItemViewModel(built, place.Cell.X, place.Cell.Y);
+        place.Bag.Add(item);
+        if (place.Bag != MainBag)
+            SelectedBag = place.Bag;
+
+        _ = ResolveAsync(item.Item);
+        OnBagsChanged();
+    }
+
+    /// <summary>
+    /// Opens the item builder on <paramref name="item"/>. The changed item stays where it is when it still fits there
+    /// (it may be larger now), otherwise it moves to the first free cell of its bag, then of the other bags; removing it
+    /// in the builder takes it out of its bag.
+    /// </summary>
+    public void EditItem(InventoryItemViewModel item)
+    {
+        if (!CanEditItems || AllBags.FirstOrDefault(b => b.Items.Contains(item)) is not { } bag)
+            return;
+
+        StatusMessage = null;
+        var result = _dialogs.ShowItemBuilder(item.CurrentItem);
+        if (result.Removed)
+        {
+            Remove(item, bag);
+            return;
+        }
+
+        if (result.Item is not { } built)
+            return;
+
+        if (FindPlace(built.Columns, built.Rows, bag, (item.X, item.Y), ignore: item) is not { } place)
+        {
+            StatusMessage = $"There is no free room of {built.Columns} x {built.Rows} cells in the bags for the changed item, so it was not changed. Make room and change it again.";
+            return;
+        }
+
+        var view = item.Replace(built);
+        if (!ReferenceEquals(place.Bag, bag))
+        {
+            bag.Remove(item);
+            place.Bag.Add(item);
+        }
+
+        item.X = place.Cell.X;
+        item.Y = place.Cell.Y;
+        _ = ResolveAsync(view);
+        OnBagsChanged();
+    }
+
+    /// <summary>Removes <paramref name="item"/> from its bag after asking.</summary>
+    public void RemoveItem(InventoryItemViewModel item)
+    {
+        if (!CanEditItems || AllBags.FirstOrDefault(b => b.Items.Contains(item)) is not { } bag)
+            return;
+
+        if (!_dialogs.Confirm("Remove item", $"Remove {item.Item.Name} from the bag? It is deleted from the save file when you save the character."))
+            return;
+
+        Remove(item, bag);
+    }
+
+    private void Remove(InventoryItemViewModel item, InventoryBagViewModel bag)
+    {
+        bag.Remove(item);
+        // An item of the file can be put back by the undo button; a new one is simply gone.
+        if (!item.IsNew)
+            _removed.Add((item, AllBags.First(b => b.Index == item.FromBag)));
+
+        StatusMessage = null;
+        OnBagsChanged();
+    }
+
+    /// <summary>
+    /// Where an item of that size goes: the preferred cell of <paramref name="bag"/>, its first free cell, then the first
+    /// free cell of the other bags (main bag first).
+    /// </summary>
+    private (InventoryBagViewModel Bag, (int X, int Y) Cell)? FindPlace(
+        int columns, int rows, InventoryBagViewModel bag, (int X, int Y)? cell, InventoryItemViewModel? ignore)
+    {
+        if (cell is { } preferred && bag.CanPlace(columns, rows, preferred.X, preferred.Y, ignore))
+            return (bag, preferred);
+
+        foreach (var candidate in AllBags.Where(b => b != bag).Prepend(bag))
+        {
+            if (candidate.FindFreeCell(columns, rows, ignore) is { } free)
+                return (candidate, free);
+        }
+
+        return null;
+    }
+
+    /// <summary>Reads the name, icon and tooltip of a new or changed item on a worker thread.</summary>
+    private async Task ResolveAsync(EquipmentSlotViewModel view)
+    {
+        try
+        {
+            var apply = await Task.Run(() => view.Resolve(_items, _icons));
+            apply();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.IO.IOException or UnauthorizedAccessException)
+        {
+            // The item keeps its record name; it is still written.
+        }
     }
 
     #endregion

@@ -1,0 +1,548 @@
+<Window x:Class="GD.SaveEditor.Presentation.Views.Inventory.ItemBuilderWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        xmlns:inventoryVm="clr-namespace:GD.SaveEditor.Presentation.ViewModels.Inventory"
+        xmlns:wpf="clr-namespace:Material.Icons.WPF;assembly=Material.Icons.WPF"
+        mc:Ignorable="d"
+        d:DataContext="{d:DesignInstance Type=inventoryVm:ItemBuilderViewModel, IsDesignTimeCreatable=False}"
+        Title="{Binding Title}"
+        Width="1180"
+        Height="780"
+        MinWidth="900"
+        MinHeight="540"
+        ResizeMode="CanResize"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        Foreground="{DynamicResource WindowForegroundBrush}">
+
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="32"
+                            ResizeBorderThickness="4"
+                            CornerRadius="0"
+                            GlassFrameThickness="0"
+                            UseAeroCaptionButtons="False" />
+    </shell:WindowChrome.WindowChrome>
+
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/GD.SaveEditor;component/Presentation/Views/Characters/ItemResources.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- A pill of the category / rarity filters: rarity pills have a dot in the rarity's color. -->
+            <Style x:Key="FilterPillButtonStyle" TargetType="Button">
+                <Setter Property="Margin" Value="0,0,6,6" />
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Bd"
+                                    Padding="12,5"
+                                    CornerRadius="13"
+                                    BorderThickness="1"
+                                    BorderBrush="{DynamicResource ControlBorderBrush}"
+                                    Background="{DynamicResource ControlBackgroundBrush}"
+                                    SnapsToDevicePixels="True">
+                                <StackPanel Orientation="Horizontal">
+                                    <Ellipse Width="8"
+                                             Height="8"
+                                             Margin="0,0,6,0"
+                                             VerticalAlignment="Center"
+                                             Fill="{Binding DotRarity, Converter={StaticResource RarityBrush}}"
+                                             Visibility="{Binding HasDot, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                    <TextBlock x:Name="Text"
+                                               VerticalAlignment="Center"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource WindowForegroundBrush}"
+                                               Text="{Binding Name}" />
+                                </StackPanel>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource ControlHoverBorderBrush}" />
+                                </Trigger>
+                                <Trigger Property="IsKeyboardFocused" Value="True">
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                </Trigger>
+                                <!-- Declared last so the selected look wins over hover and focus. -->
+                                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                                    <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SelectionBackgroundBrush}" />
+                                    <Setter TargetName="Text" Property="FontWeight" Value="SemiBold" />
+                                </DataTrigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- One part of the item: "Add prefix" when empty; otherwise its name, stats, "Change" and "Remove". -->
+            <DataTemplate x:Key="PartSlotTemplate" DataType="{x:Type inventoryVm:ItemPartSlotViewModel}">
+                <Border x:Name="Box"
+                        Margin="0,0,0,8"
+                        Padding="10,8"
+                        CornerRadius="6"
+                        BorderThickness="1"
+                        BorderBrush="{DynamicResource ControlBorderBrush}"
+                        Background="{DynamicResource TitleBarBackgroundBrush}">
+                    <StackPanel>
+                        <DockPanel LastChildFill="False">
+                            <TextBlock DockPanel.Dock="Left"
+                                       VerticalAlignment="Center"
+                                       FontSize="11"
+                                       FontWeight="SemiBold"
+                                       Foreground="{DynamicResource SecondaryForegroundBrush}"
+                                       Text="{Binding Label}" />
+                            <Button DockPanel.Dock="Right"
+                                    Margin="8,0,0,0"
+                                    Style="{StaticResource TextLinkButtonStyle}"
+                                    Content="Remove"
+                                    Command="{Binding RemoveCommand}"
+                                    Visibility="{Binding HasPart, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                            <Button DockPanel.Dock="Right"
+                                    Style="{StaticResource TextLinkButtonStyle}"
+                                    Content="Change"
+                                    Command="{Binding ChooseCommand}"
+                                    Visibility="{Binding HasPart, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                            <Button DockPanel.Dock="Right"
+                                    Style="{StaticResource TextLinkButtonStyle}"
+                                    Content="{Binding AddText}"
+                                    Command="{Binding ChooseCommand}"
+                                    Visibility="{Binding HasPart, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
+                        </DockPanel>
+
+                        <StackPanel Margin="0,6,0,0" Visibility="{Binding HasPart, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <TextBlock FontWeight="SemiBold"
+                                       TextWrapping="Wrap"
+                                       Foreground="{Binding Rarity, Converter={StaticResource RarityBrush}}"
+                                       Text="{Binding Name}" />
+                            <TextBlock Margin="0,2,0,0"
+                                       FontSize="12"
+                                       TextWrapping="Wrap"
+                                       Style="{StaticResource SecondaryTextStyle}"
+                                       Text="{Binding Summary}"
+                                       Visibility="{Binding HasSummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+                <DataTemplate.Triggers>
+                    <DataTrigger Binding="{Binding IsPicking}" Value="True">
+                        <Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                    </DataTrigger>
+                </DataTemplate.Triggers>
+            </DataTemplate>
+
+            <!-- Items grouped by type, parts by kind; the view model already orders them group by group. -->
+            <CollectionViewSource x:Key="GroupedOptions" Source="{Binding Options}">
+                <CollectionViewSource.GroupDescriptions>
+                    <PropertyGroupDescription PropertyName="GroupName" />
+                </CollectionViewSource.GroupDescriptions>
+            </CollectionViewSource>
+
+            <CollectionViewSource x:Key="GroupedPickerOptions" Source="{Binding PickerOptions}">
+                <CollectionViewSource.GroupDescriptions>
+                    <PropertyGroupDescription PropertyName="GroupName" />
+                </CollectionViewSource.GroupDescriptions>
+            </CollectionViewSource>
+
+            <GroupStyle x:Key="ListGroupStyle">
+                <GroupStyle.HeaderTemplate>
+                    <DataTemplate>
+                        <TextBlock Margin="12,10,8,4"
+                                   FontSize="11"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource SecondaryForegroundBrush}"
+                                   Text="{Binding Name}" />
+                    </DataTemplate>
+                </GroupStyle.HeaderTemplate>
+            </GroupStyle>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Window.InputBindings>
+        <KeyBinding Key="Escape" Command="{Binding CancelCommand}" />
+    </Window.InputBindings>
+
+    <Border BorderBrush="{DynamicResource WindowBorderBrush}" BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="32" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- ===== Title bar ===== -->
+            <Grid Grid.Row="0" Background="{DynamicResource TitleBarBackgroundBrush}">
+                <TextBlock Margin="12,0,0,0"
+                           VerticalAlignment="Center"
+                           FontSize="12"
+                           Text="{Binding Title}" />
+                <Button HorizontalAlignment="Right"
+                        Style="{StaticResource CloseCaptionButtonStyle}"
+                        ToolTip="Close"
+                        Content="&#xE8BB;"
+                        Command="{Binding CancelCommand}" />
+            </Grid>
+
+            <!-- ===== Category and rarity filters ===== -->
+            <StackPanel Grid.Row="1" Margin="20,16,20,4">
+                <TextBlock Margin="0,0,0,8" Text="Category" Style="{StaticResource SectionHeaderTextStyle}" />
+                <ItemsControl ItemsSource="{Binding Categories}" Focusable="False">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type inventoryVm:FilterOptionViewModel}">
+                            <Button Style="{StaticResource FilterPillButtonStyle}"
+                                    Command="{Binding DataContext.SelectCategoryCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                    CommandParameter="{Binding}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <StackPanel Visibility="{Binding HasRarityFilter, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <TextBlock Margin="0,6,0,8" Text="Rarity" Style="{StaticResource SectionHeaderTextStyle}" />
+                    <ItemsControl ItemsSource="{Binding Rarities}" Focusable="False">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type inventoryVm:FilterOptionViewModel}">
+                                <Button Style="{StaticResource FilterPillButtonStyle}"
+                                        Command="{Binding DataContext.SelectRarityCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                        CommandParameter="{Binding}" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </StackPanel>
+
+            <!-- ===== Preview and parts (left) | items or part picker (right) ===== -->
+            <Grid Grid.Row="2" Margin="20,8,20,16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="420" />
+                    <ColumnDefinition Width="20" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0"
+                        CornerRadius="8"
+                        BorderThickness="1"
+                        BorderBrush="{DynamicResource ControlBorderBrush}"
+                        Background="{DynamicResource ControlBackgroundBrush}">
+                    <ScrollViewer Padding="16,12" VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <TextBlock Margin="0,0,0,8" Text="Preview" Style="{StaticResource SectionHeaderTextStyle}" />
+
+                            <!-- The game's tooltip of the item as built. -->
+                            <Border Padding="14,10"
+                                    CornerRadius="4"
+                                    BorderThickness="1"
+                                    Background="#F2100E12"
+                                    BorderBrush="{Binding Preview.Rarity, Converter={StaticResource RarityBrush}}"
+                                    TextElement.Foreground="{StaticResource DollTextBrush}"
+                                    Visibility="{Binding HasPreview, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <ContentControl Focusable="False"
+                                                Content="{Binding Preview}"
+                                                ContentTemplate="{StaticResource ItemTooltipContentTemplate}" />
+                            </Border>
+
+                            <TextBlock Style="{StaticResource EmptyPageTextStyle}"
+                                       Text="Select an item on the right to see it here."
+                                       Visibility="{Binding HasSelection, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
+
+                            <TextBlock Margin="0,8,0,0"
+                                       FontSize="12"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource WarningForegroundBrush}"
+                                       Text="{Binding UnknownBaseText}"
+                                       Visibility="{Binding HasUnknownBaseText, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                            <TextBlock Margin="0,8,0,0"
+                                       FontSize="12"
+                                       TextWrapping="Wrap"
+                                       Foreground="{DynamicResource ErrorForegroundBrush}"
+                                       Text="{Binding SizeError}"
+                                       Visibility="{Binding HasSizeError, Converter={StaticResource BooleanToVisibilityConverter}}" />
+
+                            <!-- Seed (the values the game rolls) and stack size -->
+                            <StackPanel Margin="0,16,0,0" Visibility="{Binding HasSelection, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <TextBlock Margin="0,0,0,8" Text="Roll" Style="{StaticResource SectionHeaderTextStyle}" />
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="90" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" VerticalAlignment="Center" Style="{StaticResource SecondaryTextStyle}" Text="Seed" />
+                                    <TextBox Grid.Column="1"
+                                             Padding="6,4"
+                                             AutomationProperties.Name="Seed"
+                                             ToolTip="The game rolls the item's values from this number. Reroll for other values."
+                                             Text="{Binding SeedText, UpdateSourceTrigger=PropertyChanged}" />
+                                    <Button Grid.Column="2"
+                                            Margin="6,0,0,0"
+                                            Style="{StaticResource SubtleIconButtonStyle}"
+                                            ToolTip="New random seed"
+                                            Command="{Binding RerollSeedCommand}">
+                                        <wpf:MaterialIcon Kind="DiceMultipleOutline" Width="18" Height="18" />
+                                    </Button>
+                                </Grid>
+                                <TextBlock Margin="90,4,0,0"
+                                           FontSize="11"
+                                           Text="{Binding SeedError}"
+                                           Foreground="{DynamicResource ErrorForegroundBrush}"
+                                           Visibility="{Binding HasSeedError, Converter={StaticResource BooleanToVisibilityConverter}}" />
+
+                                <Grid Margin="0,8,0,0" Visibility="{Binding IsStackable, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="90" />
+                                        <ColumnDefinition Width="120" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" VerticalAlignment="Center" Style="{StaticResource SecondaryTextStyle}" Text="Stack size" />
+                                    <TextBox Grid.Column="1"
+                                             Padding="6,4"
+                                             AutomationProperties.Name="Stack size"
+                                             Text="{Binding QuantityText, UpdateSourceTrigger=PropertyChanged}" />
+                                </Grid>
+                                <TextBlock Margin="90,4,0,0"
+                                           FontSize="11"
+                                           Text="{Binding QuantityError}"
+                                           Foreground="{DynamicResource ErrorForegroundBrush}"
+                                           Visibility="{Binding HasQuantityError, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                            </StackPanel>
+
+                            <!-- Parts the selected item takes -->
+                            <StackPanel Margin="0,16,0,0" Visibility="{Binding HasParts, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <TextBlock Margin="0,0,0,8" Text="Parts" Style="{StaticResource SectionHeaderTextStyle}" />
+                                <ItemsControl ItemsSource="{Binding PartSlots}"
+                                              ItemTemplate="{StaticResource PartSlotTemplate}"
+                                              Focusable="False">
+                                    <ItemsControl.ItemContainerStyle>
+                                        <Style TargetType="ContentPresenter">
+                                            <Setter Property="Visibility" Value="{Binding IsAvailable, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                        </Style>
+                                    </ItemsControl.ItemContainerStyle>
+                                </ItemsControl>
+                                <TextBlock FontSize="11"
+                                           TextWrapping="Wrap"
+                                           Style="{StaticResource SecondaryTextStyle}"
+                                           Text="{Binding PartsHint}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+
+                <!-- Part picker: replaces the item list while a part is being chosen. -->
+                <Grid Grid.Column="2"
+                      Visibility="{Binding IsPicking, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <DockPanel Grid.Row="0" Margin="0,0,0,8" LastChildFill="False">
+                        <TextBlock DockPanel.Dock="Left" Text="{Binding PickerTitle}" Style="{StaticResource SectionHeaderTextStyle}" />
+                        <Button DockPanel.Dock="Right"
+                                Style="{StaticResource TextLinkButtonStyle}"
+                                Content="Back to items"
+                                Command="{Binding ClosePickerCommand}" />
+                    </DockPanel>
+
+                    <TextBox Grid.Row="1"
+                             Margin="0,0,0,8"
+                             Padding="6,4"
+                             AutomationProperties.Name="Search parts"
+                             ToolTip="Search by name, stat or record"
+                             Text="{Binding PickerSearchText, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <Border Grid.Row="2"
+                            CornerRadius="6"
+                            BorderThickness="1"
+                            BorderBrush="{DynamicResource ControlBorderBrush}"
+                            Background="{DynamicResource ControlBackgroundBrush}">
+                        <Grid>
+                            <ListBox ItemsSource="{Binding Source={StaticResource GroupedPickerOptions}}"
+                                     SelectedItem="{Binding SelectedPickerOption}"
+                                     Style="{StaticResource PlainListBoxStyle}"
+                                     ItemContainerStyle="{StaticResource ListRowItemStyle}"
+                                     VirtualizingPanel.IsVirtualizing="True"
+                                     VirtualizingPanel.IsVirtualizingWhenGrouping="True"
+                                     Padding="0,4">
+                                <ListBox.GroupStyle>
+                                    <StaticResource ResourceKey="ListGroupStyle" />
+                                </ListBox.GroupStyle>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type inventoryVm:PartOptionViewModel}">
+                                        <StackPanel>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0"
+                                                           FontWeight="SemiBold"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Foreground="{Binding Rarity, Converter={StaticResource RarityBrush}}"
+                                                           Text="{Binding Name}" />
+                                                <TextBlock Grid.Column="1"
+                                                           Margin="12,0,0,0"
+                                                           Style="{StaticResource SecondaryTextStyle}"
+                                                           Text="{Binding Details}" />
+                                            </Grid>
+                                            <TextBlock Margin="0,2,0,0"
+                                                       TextWrapping="Wrap"
+                                                       Style="{StaticResource SecondaryTextStyle}"
+                                                       Text="{Binding Summary}"
+                                                       Visibility="{Binding HasSummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+
+                            <TextBlock Margin="12"
+                                       VerticalAlignment="Center"
+                                       TextAlignment="Center"
+                                       Style="{StaticResource EmptyPageTextStyle}"
+                                       Text="Nothing matches the search."
+                                       Visibility="{Binding HasPickerOptions, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
+                        </Grid>
+                    </Border>
+
+                    <TextBlock Grid.Row="3"
+                               Margin="0,6,0,0"
+                               FontSize="11"
+                               Style="{StaticResource SecondaryTextStyle}"
+                               Text="{Binding PickerLimitText}"
+                               Visibility="{Binding HasPickerLimitText, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                </Grid>
+
+                <!-- Items of the game database -->
+                <Grid Grid.Column="2"
+                      Visibility="{Binding IsPicking, Converter={StaticResource InverseBooleanToVisibilityConverter}}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Margin="0,0,0,8" Text="Item" Style="{StaticResource SectionHeaderTextStyle}" />
+
+                    <TextBox Grid.Row="1"
+                             Margin="0,0,0,8"
+                             Padding="6,4"
+                             AutomationProperties.Name="Search items"
+                             IsEnabled="{Binding IsDatabaseAvailable}"
+                             ToolTip="Search items by name, type, set or record"
+                             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <Border Grid.Row="2"
+                            CornerRadius="6"
+                            BorderThickness="1"
+                            BorderBrush="{DynamicResource ControlBorderBrush}"
+                            Background="{DynamicResource ControlBackgroundBrush}">
+                        <Grid>
+                            <ListBox ItemsSource="{Binding Source={StaticResource GroupedOptions}}"
+                                     SelectedItem="{Binding SelectedOption}"
+                                     Style="{StaticResource PlainListBoxStyle}"
+                                     ItemContainerStyle="{StaticResource ListRowItemStyle}"
+                                     VirtualizingPanel.IsVirtualizing="True"
+                                     VirtualizingPanel.IsVirtualizingWhenGrouping="True"
+                                     VirtualizingPanel.ScrollUnit="Pixel"
+                                     Padding="0,4">
+                                <ListBox.GroupStyle>
+                                    <StaticResource ResourceKey="ListGroupStyle" />
+                                </ListBox.GroupStyle>
+                                <ListBox.ItemTemplate>
+                                    <!-- Icon, name in its rarity color, type / level / set. -->
+                                    <DataTemplate DataType="{x:Type inventoryVm:ItemOptionViewModel}">
+                                        <Grid ToolTip="{Binding RecordPath}">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="44" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Grid.Column="0"
+                                                    Width="36" Height="36"
+                                                    HorizontalAlignment="Left"
+                                                    CornerRadius="3"
+                                                    BorderThickness="1"
+                                                    BorderBrush="{Binding Rarity, Converter={StaticResource RarityBrush}}"
+                                                    Background="{Binding Rarity, Converter={StaticResource RarityBrush}, ConverterParameter=Glow}">
+                                                <Image Margin="2"
+                                                       Stretch="Uniform"
+                                                       RenderOptions.BitmapScalingMode="HighQuality"
+                                                       Source="{Binding Icon}" />
+                                            </Border>
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                <TextBlock FontWeight="SemiBold"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Foreground="{Binding Rarity, Converter={StaticResource RarityBrush}}"
+                                                           Text="{Binding Name}" />
+                                                <TextBlock Margin="0,1,0,0"
+                                                           FontSize="11"
+                                                           TextTrimming="CharacterEllipsis"
+                                                           Style="{StaticResource SecondaryTextStyle}"
+                                                           Text="{Binding Details}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+
+                            <TextBlock Margin="12"
+                                       VerticalAlignment="Center"
+                                       TextAlignment="Center"
+                                       TextWrapping="Wrap"
+                                       Style="{StaticResource EmptyPageTextStyle}"
+                                       Text="{Binding EmptyListText}"
+                                       Visibility="{Binding HasOptions, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
+                        </Grid>
+                    </Border>
+
+                    <TextBlock Grid.Row="3"
+                               Margin="0,6,0,0"
+                               FontSize="11"
+                               Style="{StaticResource SecondaryTextStyle}"
+                               Text="{Binding ListLimitText}"
+                               Visibility="{Binding HasListLimitText, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                </Grid>
+            </Grid>
+
+            <!-- ===== Footer ===== -->
+            <Border Grid.Row="3"
+                    Padding="20,12"
+                    Background="{DynamicResource TitleBarBackgroundBrush}"
+                    BorderBrush="{DynamicResource WindowBorderBrush}"
+                    BorderThickness="0,1,0,0">
+                <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                    <Button Margin="0,0,24,0"
+                            Style="{StaticResource DialogButtonStyle}"
+                            Content="_Remove item"
+                            ToolTip="Remove this item from the bag"
+                            Command="{Binding RemoveCommand}"
+                            Visibility="{Binding CanRemove, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                    <Button Style="{StaticResource AccentButtonStyle}"
+                            Content="_Apply"
+                            IsDefault="True"
+                            Command="{Binding ApplyCommand}" />
+                    <Button Margin="8,0,0,0"
+                            Style="{StaticResource DialogButtonStyle}"
+                            Content="_Cancel"
+                            Command="{Binding CancelCommand}" />
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Border>
+</Window>

@@ -16,6 +16,14 @@
   - **Settings**: theme, saves folder (default `Documents\My Games\Grim Dawn\save\main`) and game folder.
 - Character list (a quarter of the window) split into **Softcore** and **Hardcore** tabs, each with a **Show only SSF characters** filter.
 - Character details with **Inventory** and **Waypoints** tabs (not implemented yet).
+- **Bags**: items can be dragged to another cell or bag, and added, changed or removed with the **item builder**:
+  - right-click a free cell → *Add item here…*, or the **+** button in the bag header (first free cell);
+  - right-click an item → *Change…* / *Remove*, or double-click it to open it in the builder;
+  - the undo button puts every bag back as the save file has it.
+- **Item builder** (needs the game database): category and rarity filters over every item of the game, a live preview
+  with the game's tooltip, and the parts an item can take: prefix, suffix, crafting bonus, component and augment for
+  gear, completion bonus (the ones the relic rolls are listed first) and crafting bonus for relics. The seed the game
+  rolls the values from can be typed or rerolled; components, augments and consumables take a stack size.
 
 ## Game database
 

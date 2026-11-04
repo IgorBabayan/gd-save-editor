@@ -1,11 +1,15 @@
 using System.Collections.ObjectModel;
 using System.Windows.Media.Imaging;
 using GD.SaveEditor.Presentation.ViewModels.Characters;
+using GD.SaveEditor.Services.Saves;
 using GD.SaveEditor.Services.Saves.Models;
 
 namespace GD.SaveEditor.Presentation.ViewModels.Inventory;
 
-/// <summary>An item in a bag: where it is on the grid, how many cells it covers, and where it was read from.</summary>
+/// <summary>
+/// An item in a bag: where it is on the grid, how many cells it covers, where it was read from, and what it is now (an
+/// item changed in the item builder, or one made there).
+/// </summary>
 public sealed partial class InventoryItemViewModel : ViewModelBase
 {
     /// <summary>Size of a bag cell in pixels; item icons are drawn at 32 pixels per cell, like in the game.</summary>
@@ -14,34 +18,117 @@ public sealed partial class InventoryItemViewModel : ViewModelBase
     /// <summary>Largest item size in cells (two-handed weapons are 2 x 4).</summary>
     private const int MaxSpan = 4;
 
+    /// <summary>Name, icon and tooltip of the item as read from the save file, kept to undo a change.</summary>
+    private readonly EquipmentSlotViewModel? _originalView;
+
+    /// <summary>An item of the save file.</summary>
     public InventoryItemViewModel(InventoryItem item, int fromBag, int fromIndex)
     {
         FromBag = fromBag;
         FromIndex = fromIndex;
+        OriginalItem = item.Item;
+        CurrentItem = item.Item;
         OriginalX = item.X;
         OriginalY = item.Y;
         X = item.X;
         Y = item.Y;
-        Item = new EquipmentSlotViewModel(item.Item, "Item");
-        Item.PropertyChanged += (_, e) =>
-        {
-            if (e.PropertyName == nameof(EquipmentSlotViewModel.Icon))
-                UpdateSize();
-        };
+        _originalView = new EquipmentSlotViewModel(item.Item, "Item");
+        SetView(_originalView);
+    }
+
+    /// <summary>An item made in the item builder, put at cell (<paramref name="x"/>, <paramref name="y"/>).</summary>
+    public InventoryItemViewModel(BuiltItem built, int x, int y)
+    {
+        FromBag = PlacedItem.New;
+        FromIndex = PlacedItem.New;
+        CurrentItem = built.Item;
+        X = OriginalX = x;
+        Y = OriginalY = y;
+        SetView(new EquipmentSlotViewModel(built.Item, "Item"));
+        SetSize(built.Columns, built.Rows);
     }
 
     /// <summary>Name, icon and tooltip of the item.</summary>
-    public EquipmentSlotViewModel Item { get; }
+    [ObservableProperty]
+    private EquipmentSlotViewModel _item = null!;
 
-    /// <summary>Bag the item was read from (the save file's bag order).</summary>
+    /// <summary>Bag the item was read from (the save file's bag order); <see cref="PlacedItem.New"/> for a new item.</summary>
     public int FromBag { get; }
 
-    /// <summary>Position of the item in that bag's list in the save file.</summary>
+    /// <summary>Position of the item in that bag's list in the save file; <see cref="PlacedItem.New"/> for a new item.</summary>
     public int FromIndex { get; }
+
+    /// <summary>The item as the save file has it; <c>null</c> for a new item.</summary>
+    public SaveItem? OriginalItem { get; }
+
+    /// <summary>The item as it will be written.</summary>
+    public SaveItem CurrentItem { get; private set; }
+
+    /// <summary>The item was made in the item builder: it is not in the save file yet.</summary>
+    public bool IsNew => OriginalItem is null;
+
+    /// <summary>An item of the save file was changed in the item builder.</summary>
+    public bool IsEdited => OriginalItem is not null && !ReferenceEquals(CurrentItem, OriginalItem);
 
     public int OriginalX { get; }
 
     public int OriginalY { get; }
+
+    /// <summary>
+    /// Puts <paramref name="built"/> in place of the item; its size comes from the builder (the icon of the new item).
+    /// Returns the view to resolve (name, icon, tooltip).
+    /// </summary>
+    public EquipmentSlotViewModel Replace(BuiltItem built)
+    {
+        CurrentItem = built.Item;
+        var view = new EquipmentSlotViewModel(built.Item, "Item");
+        SetView(view);
+        SetSize(built.Columns, built.Rows);
+        OnPropertyChanged(nameof(IsEdited));
+        return view;
+    }
+
+    /// <summary>Puts back the item of the save file (its name, icon and size as read).</summary>
+    public void Revert()
+    {
+        if (OriginalItem is null || _originalView is null)
+            return;
+
+        CurrentItem = OriginalItem;
+        SetView(_originalView);
+        if (_originalView.Icon is BitmapSource)
+        {
+            UpdateSize();
+        }
+        else
+        {
+            (Columns, Rows) = (1, 1);
+            IsSizeKnown = false;
+        }
+
+        OnPropertyChanged(nameof(IsEdited));
+    }
+
+    private void SetView(EquipmentSlotViewModel view)
+    {
+        if (Item is not null)
+            Item.PropertyChanged -= OnViewPropertyChanged;
+        Item = view;
+        view.PropertyChanged += OnViewPropertyChanged;
+    }
+
+    private void OnViewPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(EquipmentSlotViewModel.Icon))
+            UpdateSize();
+    }
+
+    private void SetSize(int columns, int rows)
+    {
+        Columns = Math.Clamp(columns, 1, MaxSpan);
+        Rows = Math.Clamp(rows, 1, MaxSpan);
+        IsSizeKnown = true;
+    }
 
     /// <summary>Top-left cell.</summary>
     [ObservableProperty]
@@ -86,9 +173,7 @@ public sealed partial class InventoryItemViewModel : ViewModelBase
         if (Item.Icon is not BitmapSource bitmap)
             return;
 
-        Columns = Math.Clamp((int)Math.Round(bitmap.PixelWidth / CellSize), 1, MaxSpan);
-        Rows = Math.Clamp((int)Math.Round(bitmap.PixelHeight / CellSize), 1, MaxSpan);
-        IsSizeKnown = true;
+        SetSize((int)Math.Round(bitmap.PixelWidth / CellSize), (int)Math.Round(bitmap.PixelHeight / CellSize));
     }
 }
 
@@ -183,22 +268,30 @@ public sealed partial class InventoryBagViewModel : ViewModelBase
     /// <paramref name="item"/> fits at cell (<paramref name="x"/>, <paramref name="y"/>): inside the bag and over no
     /// other item. The item itself does not count, so it can be moved by a cell onto its own old place.
     /// </summary>
-    public bool CanPlace(InventoryItemViewModel item, int x, int y)
+    public bool CanPlace(InventoryItemViewModel item, int x, int y) =>
+        item.IsSizeKnown && CanPlace(item.Columns, item.Rows, x, y, item);
+
+    /// <summary>
+    /// An item of <paramref name="columns"/> x <paramref name="rows"/> cells fits at cell (<paramref name="x"/>,
+    /// <paramref name="y"/>): inside the bag and over no other item than <paramref name="ignore"/> (the item itself
+    /// when it is moved or changed, so it can take its own old cells).
+    /// </summary>
+    public bool CanPlace(int columns, int rows, int x, int y, InventoryItemViewModel? ignore = null)
     {
-        if (!item.IsSizeKnown || x < 0 || y < 0 || x + item.Columns > Columns || y + item.Rows > Rows)
+        if (x < 0 || y < 0 || x + columns > Columns || y + rows > Rows)
             return false;
 
         foreach (var other in Items)
         {
-            if (ReferenceEquals(other, item))
+            if (ReferenceEquals(other, ignore))
                 continue;
 
-            // Without its size an item could reach under the dropped one.
+            // Without its size an item could reach under the placed one.
             if (!other.IsSizeKnown)
                 return false;
 
-            if (x < other.X + other.Columns && other.X < x + item.Columns
-                && y < other.Y + other.Rows && other.Y < y + item.Rows)
+            if (x < other.X + other.Columns && other.X < x + columns
+                && y < other.Y + other.Rows && other.Y < y + rows)
                 return false;
         }
 
@@ -206,19 +299,27 @@ public sealed partial class InventoryBagViewModel : ViewModelBase
     }
 
     /// <summary>First cell, row by row, where <paramref name="item"/> fits; <c>null</c> when the bag has no room for it.</summary>
-    public (int X, int Y)? FindFreeCell(InventoryItemViewModel item)
+    public (int X, int Y)? FindFreeCell(InventoryItemViewModel item) =>
+        item.IsSizeKnown ? FindFreeCell(item.Columns, item.Rows, item) : null;
+
+    /// <summary>First cell, row by row, where an item of that size fits; <c>null</c> when the bag has no room for it.</summary>
+    public (int X, int Y)? FindFreeCell(int columns, int rows, InventoryItemViewModel? ignore = null)
     {
         for (var y = 0; y < Rows; y++)
         {
             for (var x = 0; x < Columns; x++)
             {
-                if (CanPlace(item, x, y))
+                if (CanPlace(columns, rows, x, y, ignore))
                     return (x, y);
             }
         }
 
         return null;
     }
+
+    /// <summary>The cell under a point of the grid, in pixels from its top-left corner.</summary>
+    public static (int X, int Y) CellAt(double left, double top) =>
+        ((int)Math.Floor(left / InventoryItemViewModel.CellSize), (int)Math.Floor(top / InventoryItemViewModel.CellSize));
 
     public void Add(InventoryItemViewModel item)
     {

@@ -387,38 +387,5 @@ public sealed partial class EquipmentSlotViewModel : ViewModelBase
         _ => slot.ToString()
     };
 
-    private static string? GetClassLabel(string? cls) => cls switch
-    {
-        null => null,
-        "ArmorProtective_Head" => "Helm",
-        "ArmorProtective_Chest" => "Chest Armor",
-        "ArmorProtective_Shoulders" => "Shoulders",
-        "ArmorProtective_Hands" => "Gloves",
-        "ArmorProtective_Legs" => "Pants",
-        "ArmorProtective_Feet" => "Boots",
-        "ArmorProtective_Waist" => "Belt",
-        "ArmorJewelry_Amulet" => "Amulet",
-        "ArmorJewelry_Ring" => "Ring",
-        "ArmorJewelry_Medal" => "Medal",
-        "ItemArtifact" => "Relic",
-        "WeaponMelee_Axe" => "One-Handed Axe",
-        "WeaponMelee_Mace" => "One-Handed Mace",
-        "WeaponMelee_Sword" => "One-Handed Sword",
-        "WeaponMelee_Dagger" => "Dagger",
-        "WeaponMelee_Scepter" => "Scepter",
-        "WeaponMelee_Axe2h" => "Two-Handed Axe",
-        "WeaponMelee_Mace2h" => "Two-Handed Mace",
-        "WeaponMelee_Sword2h" => "Two-Handed Sword",
-        "WeaponHunting_Ranged1h" => "One-Handed Ranged",
-        "WeaponHunting_Ranged2h" => "Two-Handed Ranged",
-        "WeaponHunting_Spear" => "Spear",
-        "WeaponMagical_Staff" => "Staff",
-        "WeaponArmor_Shield" => "Shield",
-        "WeaponArmor_Offhand" => "Off-Hand",
-        "QuestItem" => "Quest Item",
-        "ItemRelic" => "Component",
-        "ItemEnchantment" => "Augment",
-        "OneShot_Scroll" => "Scroll",
-        _ => null
-    };
+    private static string? GetClassLabel(string? cls) => ItemClasses.GetLabel(cls);
 }

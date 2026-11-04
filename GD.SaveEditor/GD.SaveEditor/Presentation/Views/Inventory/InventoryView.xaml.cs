@@ -1,14 +1,20 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Threading;
 using GD.SaveEditor.Presentation.ViewModels.Inventory;
+using Material.Icons;
+using Material.Icons.WPF;
 
 namespace GD.SaveEditor.Presentation.Views.Inventory;
 
 /// <summary>
 /// Bags and iron bits of the selected character, shown under the equipment in the "Character" tab. Items are moved by
 /// drag and drop: onto a cell of the main bag or of the shown bag, or onto a bag's tab button (first free cell; holding
-/// an item over a tab also shows that bag).
+/// an item over a tab also shows that bag). A right-click on a bag adds an item at that cell, or changes / removes the
+/// item under the mouse; a double-click opens an item in the item builder.
 /// </summary>
 public partial class InventoryView : UserControl
 {
@@ -179,6 +185,81 @@ public partial class InventoryView : UserControl
             && ViewModel is { } viewModel && bag.FindFreeCell(item) is { } cell)
             viewModel.MoveItem(item, bag, cell.X, cell.Y);
     }
+
+    #endregion
+
+    #region Adding, changing and removing items
+
+    /// <summary>Double-click on an item: opens it in the item builder.</summary>
+    private void OnItemDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton != MouseButton.Left || sender is not FrameworkElement { DataContext: InventoryItemViewModel item }
+            || ViewModel is not { CanEditItems: true } viewModel)
+            return;
+
+        _pressedItem = null;
+        e.Handled = true;
+        // After the mouse input is done, so the builder takes the focus.
+        Dispatcher.InvokeAsync(() => viewModel.EditItem(item), DispatcherPriority.Background);
+    }
+
+    /// <summary>
+    /// Right-click on a bag: "Change…" and "Remove" for the item under the mouse, "Add item here…" on a free cell.
+    /// </summary>
+    private void OnBagMouseRightButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (ViewModel is not { CanEditItems: true } viewModel
+            || sender is not FrameworkElement { DataContext: InventoryBagViewModel bag } grid)
+            return;
+
+        e.Handled = true;
+        var menu = new ContextMenu
+        {
+            PlacementTarget = grid,
+            Placement = PlacementMode.MousePoint
+        };
+        if (TryFindResource("ThemedContextMenuStyle") is Style menuStyle)
+            menu.Style = menuStyle;
+        var itemStyle = TryFindResource("ThemedMenuItemStyle") as Style;
+
+        if (FindItem(e.OriginalSource as DependencyObject, grid) is { } item)
+        {
+            var edit = new MenuItem { Header = "Change…", Icon = MenuIcon(MaterialIconKind.PencilOutline), Style = itemStyle };
+            // After the menu has closed, so the builder (or the question) takes the focus.
+            edit.Click += (_, _) => Dispatcher.InvokeAsync(() => viewModel.EditItem(item), DispatcherPriority.Background);
+            menu.Items.Add(edit);
+            menu.Items.Add(new Separator { Style = TryFindResource("ThemedMenuSeparatorStyle") as Style });
+
+            var remove = new MenuItem { Header = "Remove", Icon = MenuIcon(MaterialIconKind.DeleteOutline), Style = itemStyle };
+            remove.Click += (_, _) => Dispatcher.InvokeAsync(() => viewModel.RemoveItem(item), DispatcherPriority.Background);
+            menu.Items.Add(remove);
+        }
+        else
+        {
+            var position = e.GetPosition(grid);
+            var cell = InventoryBagViewModel.CellAt(position.X, position.Y);
+            var add = new MenuItem { Header = "Add item here…", Icon = MenuIcon(MaterialIconKind.PlusBoxOutline), Style = itemStyle };
+            add.Click += (_, _) => Dispatcher.InvokeAsync(() => viewModel.AddItem(bag, cell), DispatcherPriority.Background);
+            menu.Items.Add(add);
+        }
+
+        menu.IsOpen = true;
+    }
+
+    /// <summary>The bag item an element belongs to (the item host carries it as its data context), up to the bag grid.</summary>
+    private static InventoryItemViewModel? FindItem(DependencyObject? node, DependencyObject grid)
+    {
+        for (; node is not null && !ReferenceEquals(node, grid);
+             node = node is Visual ? VisualTreeHelper.GetParent(node) : LogicalTreeHelper.GetParent(node))
+        {
+            if (node is FrameworkElement { DataContext: InventoryItemViewModel item })
+                return item;
+        }
+
+        return null;
+    }
+
+    private static MaterialIcon MenuIcon(MaterialIconKind kind) => new() { Kind = kind, Width = 16, Height = 16 };
 
     #endregion
 }

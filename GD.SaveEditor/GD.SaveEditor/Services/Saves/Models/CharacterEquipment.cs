@@ -57,6 +57,55 @@ public sealed record SaveItem(
     /// 352 for a stack of dynamite) and leave <see cref="StackCount"/> at 0; older ones use <see cref="StackCount"/>.
     /// </summary>
     public uint Quantity => ExtraFields.Count >= 2 ? ExtraFields[1] : StackCount;
+
+    /// <summary>
+    /// A new item of <paramref name="baseRecord"/> with nothing added to it. The extra fields are left empty: the save
+    /// editor fills them for the file's inventory version when it writes the item (see <see cref="WithExtraFieldCount"/>).
+    /// </summary>
+    public static SaveItem Create(string baseRecord, uint seed, uint quantity = 1) =>
+        new(baseRecord, string.Empty, string.Empty, string.Empty, string.Empty, seed,
+            string.Empty, string.Empty, 0, string.Empty, 0, 0, 0, Math.Max(1, quantity));
+
+    /// <summary>
+    /// The item holding <paramref name="quantity"/> items, stored where the item keeps its count: the second extra
+    /// field of version 11 inventories, <see cref="StackCount"/> otherwise.
+    /// </summary>
+    public SaveItem WithQuantity(uint quantity)
+    {
+        quantity = Math.Max(1, quantity);
+        if (ExtraFields.Count < 2)
+            return this with { StackCount = quantity };
+
+        var extra = ExtraFields.ToArray();
+        extra[1] = quantity;
+        return this with { ExtraFields = extra };
+    }
+
+    /// <summary>
+    /// The item with exactly <paramref name="count"/> extra fields, as the inventory of the file stores them. An item
+    /// made by the editor (no extra fields yet) moves its count from <see cref="StackCount"/> into the second field,
+    /// like the game does in version 11; the other new fields are 0.
+    /// </summary>
+    public SaveItem WithExtraFieldCount(int count)
+    {
+        if (ExtraFields.Count == count)
+            return this;
+
+        var extra = new uint[count];
+        for (var i = 0; i < Math.Min(count, ExtraFields.Count); i++)
+            extra[i] = ExtraFields[i];
+
+        if (ExtraFields.Count < 2 && count >= 2)
+        {
+            extra[1] = Math.Max(1, StackCount);
+            return this with { ExtraFields = extra, StackCount = 0 };
+        }
+
+        if (ExtraFields.Count >= 2 && count < 2)
+            return this with { ExtraFields = extra, StackCount = Math.Max(1, ExtraFields[1]) };
+
+        return this with { ExtraFields = extra };
+    }
 }
 
 /// <summary>An item in an equipment slot.</summary>

@@ -10,6 +10,7 @@ using GD.SaveEditor.Presentation.Views.Database;
 using GD.SaveEditor.Presentation.Views.Settings;
 using GD.SaveEditor.Services.GameData;
 using GD.SaveEditor.Services.GameData.Database;
+using GD.SaveEditor.Services.GameData.Items;
 using GD.SaveEditor.Services.GameData.Textures;
 using GD.SaveEditor.Services.Notifications;
 using GD.SaveEditor.Services.Saves;
@@ -46,6 +47,7 @@ static class ServiceCollectionExtensions
             services.AddSingleton<IGameTextProvider, GameTextProvider>();
             services.AddSingleton<IGameItemProvider, GameItemProvider>();
             services.AddSingleton<IGameIconProvider, GameIconProvider>();
+            services.AddSingleton<IItemCatalog, ItemCatalog>();
 
             return services;
         }

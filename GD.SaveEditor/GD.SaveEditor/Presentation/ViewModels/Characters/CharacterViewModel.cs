@@ -1,3 +1,4 @@
+using GD.SaveEditor.Presentation.Services;
 using GD.SaveEditor.Presentation.ViewModels.Inventory;
 using GD.SaveEditor.Presentation.ViewModels.Waypoints;
 using GD.SaveEditor.Services.GameData.Database;
@@ -15,12 +16,17 @@ public sealed partial class CharacterViewModel : ViewModelBase
 {
     private readonly ICharacterSaveEditor _saveEditor;
 
-    public CharacterViewModel(CharacterSave character, IGameItemProvider items, IGameIconProvider icons, ICharacterSaveEditor saveEditor)
+    public CharacterViewModel(
+        CharacterSave character,
+        IGameItemProvider items,
+        IGameIconProvider icons,
+        ICharacterSaveEditor saveEditor,
+        IDialogService dialogs)
     {
         _saveEditor = saveEditor;
         Character = character;
         Equipment = new CharacterEquipmentViewModel(character, items, icons);
-        Inventory = new InventoryViewModel(character, items, icons);
+        Inventory = new InventoryViewModel(character, items, icons, dialogs);
         Waypoints = new WaypointsViewModel(character);
 
         Inventory.PropertyChanged += (_, e) =>
@@ -49,7 +55,7 @@ public sealed partial class CharacterViewModel : ViewModelBase
 
     /// <summary>
     /// The bytes to write into <c>player.gdc</c>: the file as read with the changes made in the tabs (the iron bits
-    /// and the items moved in the bags).
+    /// and the items moved, added, changed or removed in the bags).
     /// </summary>
     /// <exception cref="System.IO.InvalidDataException">The changes cannot be written into this file.</exception>
     public byte[] GetSaveData() =>

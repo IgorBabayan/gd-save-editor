@@ -54,17 +54,11 @@
     </DataTemplate>
 
     <!--
-        Tooltip of an item, laid out like the game's: name in its rarity color, type, base values, the merged stats
-        and skill bonuses, component and augment with their stats, requirements; the editor's details at the bottom.
+        Contents of an item's tooltip, laid out like the game's: name in its rarity color, type, base values, the merged
+        stats and skill bonuses, component and augment with their stats, requirements; the editor's details at the
+        bottom. Used by the tooltip of bag and equipment items and by the preview of the item builder.
     -->
-    <ToolTip x:Key="ItemToolTip"
-             x:Shared="False"
-             MaxWidth="420"
-             Padding="14,10"
-             Background="#F2100E12"
-             BorderThickness="1"
-             BorderBrush="{Binding Rarity, Converter={StaticResource RarityBrush}}"
-             Foreground="{StaticResource DollTextBrush}">
+    <DataTemplate x:Key="ItemTooltipContentTemplate" DataType="{x:Type charactersVm:EquipmentSlotViewModel}">
         <StackPanel>
             <!-- Name, type, base values -->
             <StackPanel Orientation="Horizontal">
@@ -140,5 +134,17 @@
                 </StackPanel>
             </Border>
         </StackPanel>
+    </DataTemplate>
+
+    <!-- Tooltip of an item: the contents above in a dark box framed in the item's rarity color. -->
+    <ToolTip x:Key="ItemToolTip"
+             x:Shared="False"
+             MaxWidth="420"
+             Padding="14,10"
+             Background="#F2100E12"
+             BorderThickness="1"
+             BorderBrush="{Binding Rarity, Converter={StaticResource RarityBrush}}"
+             Foreground="{StaticResource DollTextBrush}">
+        <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource ItemTooltipContentTemplate}" />
     </ToolTip>
 </ResourceDictionary>

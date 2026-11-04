@@ -80,6 +80,12 @@ public sealed class CharacterFile
     /// <summary>Why the file cannot be encrypted again with changes; <c>null</c> when every value was read.</summary>
     public string? RewriteError { get; private set; }
 
+    /// <summary>
+    /// int32 fields the file stores after the stack count of every item (four in version 11 inventories, none in older
+    /// ones); an item written into the file needs exactly that many (see <see cref="SaveItem.WithExtraFieldCount"/>).
+    /// </summary>
+    public int ItemExtraFields => _itemExtraFields;
+
     /// <summary>Every value of the file in order; empty unless read with <c>recordTokens</c>.</summary>
     public IReadOnlyList<GdcToken> Tokens { get; private set; } = [];
 
