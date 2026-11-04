@@ -21,8 +21,11 @@ namespace GD.SaveEditor.Services.GameData;
 /// </summary>
 public sealed class DatabaseGenerator(IGameFileProvider fileProvider, IGameDatabaseMigrator migrator) : IDatabaseGenerator
 {
-    /// <summary>Records stored in the database; the rest of the game database (monsters, skills, ...) is left out.</summary>
-    private static readonly string[] ImportedRecordPrefixes = ["records/items/"];
+    /// <summary>
+    /// Records stored in the database: items (with affixes, components, augments) and skills, which item tooltips
+    /// name ("+3 to Disintegration", granted skills). The rest of the game database (monsters, ...) is left out.
+    /// </summary>
+    private static readonly string[] ImportedRecordPrefixes = ["records/items/", "records/skills/"];
 
     private static readonly JsonWriterOptions JsonOptions = new()
     {

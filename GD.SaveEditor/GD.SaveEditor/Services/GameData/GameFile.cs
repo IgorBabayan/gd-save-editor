@@ -33,6 +33,10 @@ public sealed record GameFile(string RelativePath, string Description, GameFileK
         new("gdx2/database/GDX2.arz", "Forgotten Gods", GameFileKind.Database, IsRequired: false),
         new("gdx3/database/GDX3.arz", "Fangs of Asterkarn", GameFileKind.Database, IsRequired: false),
         new("resources/Text_EN.arc", "English item names and descriptions", GameFileKind.Text, IsRequired: true),
+        // Item, affix and skill names added by the expansions are only in their own text archives.
+        new("gdx1/resources/Text_EN.arc", "Ashes of Malmouth texts", GameFileKind.Text, IsRequired: false),
+        new("gdx2/resources/Text_EN.arc", "Forgotten Gods texts", GameFileKind.Text, IsRequired: false),
+        new("gdx3/resources/Text_EN.arc", "Fangs of Asterkarn texts", GameFileKind.Text, IsRequired: false),
         new("resources/Items.arc", "Item icons and other item resources", GameFileKind.Resources, IsRequired: false)
     ];
 }

@@ -26,7 +26,7 @@ public interface IGameDatabaseMigrator
 public sealed class GameDatabaseMigrator : IGameDatabaseMigrator
 {
     /// <summary>Raise when the importer stores records differently, so the next run re-reads the game files.</summary>
-    public const int ImportVersion = 1;
+    public const int ImportVersion = 2;
 
     /// <summary><c>PRAGMA user_version</c> of the current schema.</summary>
     private const int SchemaVersion = 1;

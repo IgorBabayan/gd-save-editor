@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using GD.SaveEditor.Services.GameData.Items;
 using Microsoft.Data.Sqlite;
 
 namespace GD.SaveEditor.Services.GameData.Database;
@@ -27,6 +28,7 @@ public enum ItemRarity
 /// <param name="QualityText">Quality word the game puts before the name (e.g. "Mythical"), if any.</param>
 /// <param name="StyleText">Style word the game puts before the name, if any.</param>
 /// <param name="SetName">Name of the item set the item belongs to, if any.</param>
+/// <param name="Fields">All fields of the record (stats, skills, ...) as a JSON object.</param>
 public sealed record GameItemInfo(
     string RecordPath,
     string? Name,
@@ -36,7 +38,18 @@ public sealed record GameItemInfo(
     int? LevelRequirement,
     string? QualityText,
     string? StyleText,
-    string? SetName);
+    string? SetName,
+    JsonElement Fields)
+{
+    /// <summary>
+    /// Width of the stat roll in percent (20 → ±10%): <c>attributeScalePercent</c> of items, <c>lootRandomizerJitter</c>
+    /// of affixes; 0 when the stats are fixed.
+    /// </summary>
+    public double ScalePercent =>
+        ItemStatBlock.GetNumber(Fields, "attributeScalePercent") is { } scale and > 0 ? scale
+        : ItemStatBlock.GetNumber(Fields, "lootRandomizerJitter") is { } jitter and > 0 ? jitter
+        : 0;
+}
 
 /// <summary>Item, affix and component records of <c>database.db</c>.</summary>
 public interface IGameItemProvider
@@ -72,6 +85,8 @@ public sealed partial class GameItemProvider(IGameTextProvider texts) : IGameIte
             if (_cache.TryGetValue(path, out var cached))
                 return cached;
 
+            // Placeholder first: a record that names itself through another one (buffs, sets) cannot recurse forever.
+            _cache[path] = null;
             var info = Read(path);
             _cache[path] = info;
             return info;
@@ -141,7 +156,11 @@ public sealed partial class GameItemProvider(IGameTextProvider texts) : IGameIte
             fields = default;
         }
 
-        var name = Text(nameTag) ?? Text(GetString(fields, "lootRandomizerName"));
+        // Items and affixes; skills (granted or "+3 to ...") name themselves in skillDisplayName, buffs in the skill they start.
+        var name = Text(nameTag)
+                   ?? Text(GetString(fields, "lootRandomizerName"))
+                   ?? Text(GetString(fields, "skillDisplayName"))
+                   ?? (GetString(fields, "buffSkillName") is { Length: > 0 } buff ? GetItem(buff)?.Name : null);
         var setName = GetString(fields, "itemSetName") is { Length: > 0 } setRecord && GetItem(setRecord) is { } set
             ? set.Name
             : null;
@@ -155,7 +174,8 @@ public sealed partial class GameItemProvider(IGameTextProvider texts) : IGameIte
             LevelRequirement: GetInt(fields, "levelRequirement"),
             QualityText: Text(GetString(fields, "itemQualityTag")),
             StyleText: Text(GetString(fields, "itemStyleTag")),
-            SetName: setName);
+            SetName: setName,
+            Fields: fields);
     }
 
     private string? Text(string? tag) => texts.GetText(tag) is { } text && CleanText(text) is { Length: > 0 } clean ? clean : null;
