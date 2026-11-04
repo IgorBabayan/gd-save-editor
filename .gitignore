@@ -55,3 +55,8 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# SQLite side files (database.db while a migration runs)
+*.db-journal
+*.db-wal
+*.db-shm

@@ -1,0 +1,31 @@
+<!-- "Default light" color palette. Every theme must define the same set of keys. -->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <SolidColorBrush x:Key="TitleBarBackgroundBrush"         Color="#EBEBEB" />
+    <SolidColorBrush x:Key="TitleBarInactiveForegroundBrush" Color="#8A8A8A" />
+    <SolidColorBrush x:Key="WindowBackgroundBrush"           Color="#F9F9F9" />
+    <SolidColorBrush x:Key="WindowBorderBrush"               Color="#D1D1D1" />
+    <SolidColorBrush x:Key="WindowForegroundBrush"           Color="#1B1B1B" />
+    <SolidColorBrush x:Key="SecondaryForegroundBrush"        Color="#5F5F5F" />
+    <SolidColorBrush x:Key="CaptionButtonHoverBrush"         Color="#1A000000" />
+    <SolidColorBrush x:Key="CaptionButtonPressedBrush"       Color="#0F000000" />
+    <SolidColorBrush x:Key="CloseButtonHoverBrush"           Color="#C42B1C" />
+    <SolidColorBrush x:Key="CloseButtonPressedBrush"         Color="#A32317" />
+    <SolidColorBrush x:Key="ControlBackgroundBrush"          Color="#FFFFFF" />
+    <SolidColorBrush x:Key="ControlBorderBrush"              Color="#C8C8C8" />
+    <SolidColorBrush x:Key="ControlHoverBorderBrush"         Color="#9A9A9A" />
+    <SolidColorBrush x:Key="ButtonBackgroundBrush"           Color="#FFFFFF" />
+    <SolidColorBrush x:Key="ButtonHoverBackgroundBrush"      Color="#F0F0F0" />
+    <SolidColorBrush x:Key="ButtonPressedBackgroundBrush"    Color="#E5E5E5" />
+    <SolidColorBrush x:Key="AccentBrush"                     Color="#0067C0" />
+    <SolidColorBrush x:Key="AccentHoverBrush"                Color="#1975C5" />
+    <SolidColorBrush x:Key="AccentPressedBrush"              Color="#005BA8" />
+    <SolidColorBrush x:Key="AccentForegroundBrush"           Color="#FFFFFF" />
+    <SolidColorBrush x:Key="SelectionBackgroundBrush"        Color="#CCE4F7" />
+    <SolidColorBrush x:Key="ListItemHoverBackgroundBrush"     Color="#EAEAEA" />
+    <SolidColorBrush x:Key="WarningForegroundBrush"          Color="#9D5D00" />
+    <SolidColorBrush x:Key="ErrorForegroundBrush"            Color="#C42B1C" />
+    <SolidColorBrush x:Key="SuccessForegroundBrush"          Color="#0F7B0F" />
+
+</ResourceDictionary>

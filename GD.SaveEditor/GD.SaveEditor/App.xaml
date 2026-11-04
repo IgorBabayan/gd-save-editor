@@ -1,9 +1,14 @@
-﻿<Application x:Class="GD.SaveEditor.App"
+<Application x:Class="GD.SaveEditor.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="clr-namespace:GD.SaveEditor"
-             StartupUri="MainWindow.xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Application.Resources>
-         
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!-- Active color palette. Must stay first: IThemeService replaces it at runtime. -->
+                <ResourceDictionary Source="Themes/Colors/DefaultNight.xaml" />
+                <ResourceDictionary Source="Themes/WindowChrome.xaml" />
+                <ResourceDictionary Source="Themes/Controls.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
     </Application.Resources>
 </Application>
