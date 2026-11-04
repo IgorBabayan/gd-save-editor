@@ -65,77 +65,90 @@
                     </TextBlock.Style>
                 </TextBlock>
 
-                <!-- One bar per step of the generator (downloads, reading, migration), added as the generator starts them. -->
-                <ItemsControl Margin="0,8,0,0" ItemsSource="{Binding Steps}" Focusable="False">
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate DataType="{x:Type generatorVm:DatabaseGeneratorStepViewModel}">
-                            <Grid Margin="0,8,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                    <RowDefinition Height="Auto" />
-                                </Grid.RowDefinitions>
+                <!--
+                    One progress bar for the whole run: each step of the generator (downloads, reading, migration)
+                    resets it, so the dialog keeps its size. Results and problems of the steps go to the log below.
+                -->
+                <Grid Margin="0,16,0,0"
+                      DataContext="{Binding Step}"
+                      Visibility="{Binding DataContext.HasStep, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
 
-                                <wpf:MaterialIcon x:Name="StateIcon"
-                                                  Grid.Row="0"
-                                                  Grid.Column="0"
-                                                  Width="16"
-                                                  Height="16"
-                                                  Margin="0,0,6,0"
-                                                  VerticalAlignment="Center"
-                                                  Kind="CheckCircle"
-                                                  Foreground="{DynamicResource SuccessForegroundBrush}"
-                                                  Visibility="Collapsed" />
-                                <TextBlock Grid.Row="0"
-                                           Grid.Column="1"
-                                           VerticalAlignment="Center"
-                                           Text="{Binding Title}" />
-                                <TextBlock Grid.Row="0"
-                                           Grid.Column="2"
-                                           Margin="12,0,0,0"
-                                           VerticalAlignment="Center"
-                                           Style="{StaticResource SecondaryTextStyle}"
-                                           Text="{Binding PercentText}" />
+                    <wpf:MaterialIcon Grid.Row="0"
+                                      Grid.Column="0"
+                                      Width="16"
+                                      Height="16"
+                                      Margin="0,0,6,0"
+                                      VerticalAlignment="Center">
+                        <wpf:MaterialIcon.Style>
+                            <Style TargetType="wpf:MaterialIcon">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding State}" Value="{x:Static generatorVm:DatabaseGeneratorStepState.Completed}">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                        <Setter Property="Kind" Value="CheckCircle" />
+                                        <Setter Property="Foreground" Value="{DynamicResource SuccessForegroundBrush}" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding State}" Value="{x:Static generatorVm:DatabaseGeneratorStepState.Stopped}">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                        <Setter Property="Kind" Value="AlertCircle" />
+                                        <Setter Property="Foreground" Value="{DynamicResource ErrorForegroundBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </wpf:MaterialIcon.Style>
+                    </wpf:MaterialIcon>
+                    <TextBlock Grid.Row="0"
+                               Grid.Column="1"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"
+                               Text="{Binding HeaderText}"
+                               ToolTip="{Binding HeaderText}" />
+                    <TextBlock Grid.Row="0"
+                               Grid.Column="2"
+                               Margin="12,0,0,0"
+                               VerticalAlignment="Center"
+                               Style="{StaticResource SecondaryTextStyle}"
+                               Text="{Binding PercentText}" />
 
-                                <ProgressBar x:Name="Bar"
-                                             Grid.Row="1"
-                                             Grid.Column="0"
-                                             Grid.ColumnSpan="3"
-                                             Margin="0,6,0,0"
-                                             Minimum="0"
-                                             Maximum="100"
-                                             Value="{Binding Percent, Mode=OneWay}" />
+                    <ProgressBar Grid.Row="1"
+                                 Grid.Column="0"
+                                 Grid.ColumnSpan="3"
+                                 Margin="0,6,0,0"
+                                 Minimum="0"
+                                 Maximum="100"
+                                 Value="{Binding Percent, Mode=OneWay}">
+                        <ProgressBar.Style>
+                            <Style TargetType="ProgressBar" BasedOn="{StaticResource {x:Type ProgressBar}}">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding State}" Value="{x:Static generatorVm:DatabaseGeneratorStepState.Stopped}">
+                                        <Setter Property="Foreground" Value="{DynamicResource ErrorForegroundBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ProgressBar.Style>
+                    </ProgressBar>
 
-                                <TextBlock Grid.Row="2"
-                                           Grid.Column="0"
-                                           Grid.ColumnSpan="3"
-                                           Margin="0,4,0,0"
-                                           Style="{StaticResource SecondaryTextStyle}"
-                                           TextWrapping="NoWrap"
-                                           TextTrimming="CharacterEllipsis"
-                                           Text="{Binding Detail}"
-                                           ToolTip="{Binding Detail}"
-                                           Visibility="{Binding HasDetail, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                            </Grid>
-                            <DataTemplate.Triggers>
-                                <DataTrigger Binding="{Binding State}" Value="{x:Static generatorVm:DatabaseGeneratorStepState.Completed}">
-                                    <Setter TargetName="StateIcon" Property="Visibility" Value="Visible" />
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding State}" Value="{x:Static generatorVm:DatabaseGeneratorStepState.Stopped}">
-                                    <Setter TargetName="StateIcon" Property="Visibility" Value="Visible" />
-                                    <Setter TargetName="StateIcon" Property="Kind" Value="AlertCircle" />
-                                    <Setter TargetName="StateIcon" Property="Foreground" Value="{DynamicResource ErrorForegroundBrush}" />
-                                    <Setter TargetName="Bar" Property="Foreground" Value="{DynamicResource ErrorForegroundBrush}" />
-                                </DataTrigger>
-                            </DataTemplate.Triggers>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                    <!-- Always takes its line, so the dialog does not jump while details come and go. -->
+                    <TextBlock Grid.Row="2"
+                               Grid.Column="0"
+                               Grid.ColumnSpan="3"
+                               Margin="0,4,0,0"
+                               Style="{StaticResource SecondaryTextStyle}"
+                               TextWrapping="NoWrap"
+                               TextTrimming="CharacterEllipsis"
+                               Text="{Binding Detail, TargetNullValue=' '}"
+                               ToolTip="{Binding Detail}" />
+                </Grid>
 
                 <!-- What the generator printed: the same lines end up in the notification. -->
                 <Border Margin="0,16,0,0"

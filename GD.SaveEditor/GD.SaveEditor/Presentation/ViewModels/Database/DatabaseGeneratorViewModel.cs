@@ -7,8 +7,9 @@ using GD.SaveEditor.Services.Notifications;
 namespace GD.SaveEditor.Presentation.ViewModels.Database;
 
 /// <summary>
-/// Progress dialog of the database generator. Mirrors every progress bar the generator reports (downloads,
-/// reading the game files, the migration), cannot be closed while it runs and enables OK once it has finished.
+/// Progress dialog of the database generator. Shows the generator's steps (downloads, reading the game files, the
+/// migration) on one progress bar that each new step resets, cannot be closed while it runs and enables OK once it
+/// has finished.
 /// </summary>
 public sealed partial class DatabaseGeneratorViewModel(
     IDatabaseGenerator generator,
@@ -16,11 +17,14 @@ public sealed partial class DatabaseGeneratorViewModel(
     IGameItemProvider gameItemProvider,
     IGameIconProvider gameIconProvider) : ViewModelBase
 {
-    private readonly Dictionary<int, DatabaseGeneratorStepViewModel> _stepsById = [];
     private Task? _run;
 
-    /// <summary>Progress bars in the order the generator started them.</summary>
-    public ObservableCollection<DatabaseGeneratorStepViewModel> Steps { get; } = [];
+    /// <summary>The single progress bar: the step the generator is working on, or the last one when it has finished.</summary>
+    public DatabaseGeneratorStepViewModel Step { get; } = new();
+
+    /// <summary>Whether the generator has started a step yet (the bar is hidden until then).</summary>
+    [ObservableProperty]
+    private bool _hasStep;
 
     /// <summary>Text lines the generator printed (results, warnings, errors).</summary>
     public ObservableCollection<DatabaseGeneratorMessage> Messages { get; } = [];
@@ -89,32 +93,23 @@ public sealed partial class DatabaseGeneratorViewModel(
         switch (generatorEvent)
         {
             case DatabaseGeneratorStepStarted started:
-                GetOrAddStep(started.Id, started.Title);
+                Step.Start(started.Id, started.Title);
+                HasStep = true;
                 break;
 
-            case DatabaseGeneratorStepProgress step:
-                GetOrAddStep(step.Id).Update(step.Fraction, step.Detail);
+            // Reports of a step that is no longer shown (e.g. failed together with the current one) are dropped.
+            case DatabaseGeneratorStepProgress step when HasStep && step.Id == Step.Id:
+                Step.Update(step.Fraction, step.Detail);
                 break;
 
-            case DatabaseGeneratorStepFinished finished:
-                GetOrAddStep(finished.Id).Finish(finished.Fraction, finished.Detail, finished.Completed);
+            case DatabaseGeneratorStepFinished finished when HasStep && finished.Id == Step.Id:
+                Step.Finish(finished.Fraction, finished.Detail, finished.Completed);
                 break;
 
             case DatabaseGeneratorMessageReceived received:
                 AddMessage(received.Message);
                 break;
         }
-    }
-
-    private DatabaseGeneratorStepViewModel GetOrAddStep(int id, string? title = null)
-    {
-        if (_stepsById.TryGetValue(id, out var step))
-            return step;
-
-        step = new DatabaseGeneratorStepViewModel(id, title ?? "Working");
-        _stepsById.Add(id, step);
-        Steps.Add(step);
-        return step;
     }
 
     private void AddMessage(DatabaseGeneratorMessage message)
