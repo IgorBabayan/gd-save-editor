@@ -481,8 +481,14 @@
                                    Text="{Binding UnknownBaseText}"
                                    Visibility="{Binding HasUnknownBaseText, Converter={StaticResource BooleanToVisibilityConverter}}" />
 
-                        <!-- Category: the value is the current filter; expanding shows the pills. -->
-                        <Grid>
+                        <!-- Category: the value is the current filter; expanding shows the pills. A kind picked in the
+                             bag's "Build a new item" menu fixes it: the row shows that kind instead. -->
+                        <HeaderedContentControl Style="{StaticResource InspectorRowStyle}"
+                                                Header="Type"
+                                                Visibility="{Binding HasCategoryFilter, Converter={StaticResource InverseBooleanToVisibilityConverter}}">
+                            <TextBlock FontWeight="SemiBold" Text="{Binding KindName}" />
+                        </HeaderedContentControl>
+                        <Grid Visibility="{Binding HasCategoryFilter, Converter={StaticResource BooleanToVisibilityConverter}}">
                             <ToggleButton x:Name="CategoryToggle"
                                           Style="{StaticResource InspectorExpanderStyle}"
                                           Content="Category"

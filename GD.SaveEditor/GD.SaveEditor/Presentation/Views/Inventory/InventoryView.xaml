@@ -100,8 +100,8 @@
             <!--
                 A bag: the cell grid with its items placed on it by cell. Items are dragged by the mouse; while one is
                 over the bag, the cells it would cover are shown green (it fits) or red (outside the bag or over
-                another item). A click on an item opens the item inspector next to it; a right-click offers to add an
-                item at the cell, or to change or remove the item under the mouse.
+                another item). A click on an item opens the item inspector next to it; a right-click on a free cell
+                offers to build a new item of a kind there, on an item to change or remove it.
             -->
             <DataTemplate x:Key="BagGridTemplate" DataType="{x:Type inventoryVm:InventoryBagViewModel}">
                 <Border HorizontalAlignment="Left"

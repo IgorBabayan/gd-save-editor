@@ -41,6 +41,9 @@ public sealed partial class ItemBuilderViewModel : ViewModelBase
     /// <summary>The item being edited; <c>null</c> for a new one.</summary>
     private readonly SaveItem? _current;
 
+    /// <summary>Kind picked in the bag's "Build a new item" menu: only such items are listed; <c>null</c> lists all.</summary>
+    private readonly NewItemKind? _kind;
+
     private IReadOnlyList<ItemOptionViewModel> _allOptions = [];
     private FilterOptionViewModel _selectedCategory;
     private FilterOptionViewModel _selectedRarity;
@@ -56,9 +59,11 @@ public sealed partial class ItemBuilderViewModel : ViewModelBase
         IGameItemProvider items,
         IGameIconProvider icons,
         Func<string, string, bool> confirm,
-        SaveItem? current)
+        SaveItem? current,
+        NewItemKind? kind = null)
     {
         _catalog = catalog;
+        _kind = current is null ? kind : null;
         _items = items;
         _icons = icons;
         _confirm = confirm;
@@ -87,7 +92,10 @@ public sealed partial class ItemBuilderViewModel : ViewModelBase
             new("Epic", ItemRarity.Epic),
             new("Legendary", ItemRarity.Legendary)
         ];
-        _selectedCategory = Categories[0];
+        // A kind from the bag's menu fixes the category (its row is hidden); the rarity pills still filter gear.
+        _selectedCategory = _kind is { } fixedKind
+            ? Categories.First(c => c.Value is ItemCategory category && category == NewItemKinds.GetCategory(fixedKind))
+            : Categories[0];
         _selectedCategory.IsSelected = true;
         _selectedRarity = Rarities[0];
         _selectedRarity.IsSelected = true;
@@ -112,7 +120,15 @@ public sealed partial class ItemBuilderViewModel : ViewModelBase
     /// <summary>Raised when the user confirmed removing the item being edited; the dialog closes right after.</summary>
     public event EventHandler? RemoveRequested;
 
-    public string Title => _current is null ? "Item builder — new item" : "Item builder — edit item";
+    public string Title => _current is not null ? "Item builder — edit item"
+        : _kind is { } kind ? $"Item builder — new {NewItemKinds.GetName(kind).ToLowerInvariant()}"
+        : "Item builder — new item";
+
+    /// <summary>"Helm" when the builder lists one kind of item (picked in the bag's menu); <c>null</c> otherwise.</summary>
+    public string? KindName => _kind is { } kind ? NewItemKinds.GetName(kind) : null;
+
+    /// <summary>The category pills are offered: the list is not fixed to one kind of item.</summary>
+    public bool HasCategoryFilter => _kind is null;
 
     /// <summary><c>false</c> when <c>database.db</c> is missing: the user has to generate it first.</summary>
     public bool IsDatabaseAvailable { get; }
@@ -291,6 +307,7 @@ public sealed partial class ItemBuilderViewModel : ViewModelBase
         !IsDatabaseAvailable ? "The game database was not found. Generate it with the database button in the title bar, then open the builder again."
         : IsLoading ? "Reading the items of the game database…"
         : _allOptions.Count == 0 ? "The game database has no items. Update it with the database button in the title bar."
+        : KindName is { } kindName ? $"No {kindName.ToLowerInvariant()} items match the filters."
         : "No items match the filters.";
 
     private void ApplyFilter()
@@ -301,7 +318,8 @@ public sealed partial class ItemBuilderViewModel : ViewModelBase
         var rarity = HasRarityFilter ? _selectedRarity.Value as ItemRarity? : null;
 
         var matches = _allOptions.Where(o =>
-                (category is null || o.Item.Category == category)
+                (_kind is null || NewItemKinds.Matches(_kind.Value, o.Item))
+                && (category is null || o.Item.Category == category)
                 && (rarity is null || o.Item.Rarity == rarity)
                 && words.All(w => o.Name.Contains(w, StringComparison.CurrentCultureIgnoreCase)
                                   || o.GroupName.Contains(w, StringComparison.CurrentCultureIgnoreCase)
@@ -670,7 +688,9 @@ public sealed partial class ItemBuilderViewModel : ViewModelBase
         : Preview?.Name ?? SelectedOption.Name;
 
     /// <summary>"Double Rare Ring", "Component", ...</summary>
-    public string HeaderType => SelectedOption is null ? "New item" : Preview?.TypeText ?? SelectedOption.Details;
+    public string HeaderType => SelectedOption is null
+        ? KindName is { } kindName ? $"New {kindName.ToLowerInvariant()}" : "New item"
+        : Preview?.TypeText ?? SelectedOption.Details;
 
     public System.Windows.Media.ImageSource? HeaderIcon => Preview?.Icon ?? SelectedOption?.Icon;
 
@@ -678,7 +698,11 @@ public sealed partial class ItemBuilderViewModel : ViewModelBase
     public ItemRarity HeaderRarity => Preview?.Rarity ?? SelectedOption?.Rarity ?? ItemRarity.Unknown;
 
     /// <summary>Value of the inspector's "Item" row.</summary>
-    public string SelectedItemText => SelectedOption?.Name ?? "Choose an item";
+    public string SelectedItemText => SelectedOption?.Name
+                                      ?? (KindName is { } kindName ? $"Choose {WithArticle(kindName.ToLowerInvariant())}" : "Choose an item");
+
+    /// <summary>"a helm", "an amulet".</summary>
+    private static string WithArticle(string noun) => "aeiou".Contains(noun[0]) ? $"an {noun}" : $"a {noun}";
 
     /// <summary>Value of the inspector's "Category" row.</summary>
     public string SelectedCategoryName => _selectedCategory.Name;

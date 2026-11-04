@@ -3,6 +3,7 @@ using System.Text;
 using GD.SaveEditor.Presentation.Services;
 using GD.SaveEditor.Presentation.ViewModels.Characters;
 using GD.SaveEditor.Services.GameData.Database;
+using GD.SaveEditor.Services.GameData.Items;
 using GD.SaveEditor.Services.GameData.Textures;
 using GD.SaveEditor.Services.Saves;
 using GD.SaveEditor.Services.Saves.Models;
@@ -199,18 +200,25 @@ public sealed partial class InventoryViewModel : ViewModelBase
     private void NewItem(object? anchor) => AddItem(MainBag, null, anchor);
 
     /// <summary>
-    /// Opens the item inspector for a new item next to <paramref name="anchor"/>. Applied, the item goes on
+    /// Opens the item inspector for a new item next to <paramref name="anchor"/>, listing only items of
+    /// <paramref name="kind"/> when one was picked in the bag's "Build a new item" menu. Applied, the item goes on
     /// <paramref name="bag"/>: at <paramref name="cell"/> when it fits there, otherwise at the first free cell of that
     /// bag, then of the other bags.
     /// </summary>
-    public void AddItem(InventoryBagViewModel bag, (int X, int Y)? cell, object? anchor = null)
+    public void AddItem(InventoryBagViewModel bag, (int X, int Y)? cell, object? anchor = null, NewItemKind? kind = null)
     {
         if (!CanEditItems)
             return;
 
         StatusMessage = null;
-        _dialogs.ShowItemInspector(anchor, null, built => PlaceNewItem(built, bag, cell));
+        _dialogs.ShowItemInspector(anchor, null, built => PlaceNewItem(built, bag, cell), kind: kind);
     }
+
+    /// <summary>
+    /// Some bag has a free cell. The size of an item is only known once it is picked (from its icon), so the menu's
+    /// entries are disabled only when every bag is full; a picked item without room gets a message.
+    /// </summary>
+    public bool HasFreeCell => AllBags.Any(b => b.FindFreeCell(1, 1) is not null);
 
     private void PlaceNewItem(BuiltItem built, InventoryBagViewModel bag, (int X, int Y)? cell)
     {

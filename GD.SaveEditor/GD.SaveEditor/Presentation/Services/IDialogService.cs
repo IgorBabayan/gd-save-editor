@@ -1,5 +1,6 @@
 using GD.SaveEditor.Presentation.ViewModels.Inventory;
 using GD.SaveEditor.Services.GameData;
+using GD.SaveEditor.Services.GameData.Items;
 using GD.SaveEditor.Services.Saves.Models;
 
 namespace GD.SaveEditor.Presentation.Services;
@@ -36,8 +37,9 @@ public interface IDialogService
     /// item (<paramref name="current"/> <c>null</c>) or to change one, and returns at once: <paramref name="applied"/>
     /// is called with the built item when the user applies it, <paramref name="removed"/> when the user removes the
     /// item. Its expand button opens the full builder window. Without an anchor the full window opens (modal).
+    /// A new item's <paramref name="kind"/> (from the bag's "Build a new item" menu) limits the list to that kind.
     /// </summary>
-    void ShowItemInspector(object? anchor, SaveItem? current, Action<BuiltItem> applied, Action? removed = null);
+    void ShowItemInspector(object? anchor, SaveItem? current, Action<BuiltItem> applied, Action? removed = null, NewItemKind? kind = null);
 
     /// <summary>Closes the item inspector without applying it, if one is open.</summary>
     void CloseItemInspector();

@@ -192,8 +192,13 @@
 
             <!-- ===== Category and rarity filters ===== -->
             <StackPanel Grid.Row="1" Margin="20,16,20,4">
-                <TextBlock Margin="0,0,0,8" Text="Category" Style="{StaticResource SectionHeaderTextStyle}" />
-                <ItemsControl ItemsSource="{Binding Categories}" Focusable="False">
+                <TextBlock Margin="0,0,0,8"
+                           Text="Category"
+                           Style="{StaticResource SectionHeaderTextStyle}"
+                           Visibility="{Binding HasCategoryFilter, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                <ItemsControl ItemsSource="{Binding Categories}"
+                              Focusable="False"
+                              Visibility="{Binding HasCategoryFilter, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <WrapPanel />

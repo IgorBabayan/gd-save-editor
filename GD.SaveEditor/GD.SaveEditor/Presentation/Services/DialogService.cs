@@ -48,9 +48,9 @@ public sealed class DialogService(IServiceProvider services) : IDialogService
         return new ItemBuilderResult(removed ? null : built, removed);
     }
 
-    public void ShowItemInspector(object? anchor, SaveItem? current, Action<BuiltItem> applied, Action? removed = null)
+    public void ShowItemInspector(object? anchor, SaveItem? current, Action<BuiltItem> applied, Action? removed = null, NewItemKind? kind = null)
     {
-        var viewModel = CreateItemBuilder(current);
+        var viewModel = CreateItemBuilder(current, kind);
         if (removed is not null)
             viewModel.RemoveRequested += (_, _) => removed();
 
@@ -66,12 +66,13 @@ public sealed class DialogService(IServiceProvider services) : IDialogService
     /// <summary>Closes the item inspector without applying it, if one is open.</summary>
     public void CloseItemInspector() => ItemInspectorAdorner.CloseCurrent();
 
-    private ItemBuilderViewModel CreateItemBuilder(SaveItem? current) =>
+    private ItemBuilderViewModel CreateItemBuilder(SaveItem? current, NewItemKind? kind = null) =>
         new(services.GetRequiredService<IItemCatalog>(),
             services.GetRequiredService<IGameItemProvider>(),
             services.GetRequiredService<IGameIconProvider>(),
             Confirm,
-            current);
+            current,
+            kind);
 
     /// <summary>The full builder window (modal) over <paramref name="viewModel"/>; the built item, or <c>null</c>.</summary>
     private static BuiltItem? ShowItemBuilderWindow(ItemBuilderViewModel viewModel)
