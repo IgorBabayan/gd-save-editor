@@ -44,6 +44,12 @@ public sealed record SaveItem(
     uint Var1,
     uint StackCount)
 {
+    /// <summary>
+    /// int32 fields newer inventory versions store after <see cref="StackCount"/> (four in version 11); kept so the
+    /// item can be written back unchanged.
+    /// </summary>
+    public IReadOnlyList<uint> ExtraFields { get; init; } = [];
+
     public bool IsEmpty => string.IsNullOrEmpty(BaseRecord);
 }
 

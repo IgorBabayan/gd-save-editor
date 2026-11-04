@@ -170,6 +170,10 @@ public sealed class CharacterSaveParser(IGameTextProvider gameTexts) : ICharacte
     ///   byte alternate2, 2 x equipment item (weapon set 2)
     /// equipment item = item, byte attached
     /// </code>
+    /// Newer inventory versions add int32 fields at the end of every item (version 4: none, version 11: four).
+    /// Since the number is not known for every version, the equipment is read with the count expected for the
+    /// version first and then with the others; a count is accepted only when every slot holds a record path (or is
+    /// empty) and the block ends exactly after the last weapon.
     /// </summary>
     private static CharacterEquipment ReadInventory(GdcReader reader, int end)
     {
@@ -193,21 +197,59 @@ public sealed class CharacterSaveParser(IGameTextProvider gameTexts) : ICharacte
             reader.ReadBlockEnd(bagEnd);
         }
 
+        var equipmentStart = reader.Snapshot();
+        foreach (var extraFields in ExtraItemFieldCandidates(version))
+        {
+            reader.Restore(equipmentStart);
+            try
+            {
+                if (TryReadEquipment(reader, end, extraFields) is { } equipment)
+                    return equipment;
+            }
+            catch (InvalidDataException)
+            {
+                // Wrong field count: the next candidate is tried from the same position.
+            }
+        }
+
+        throw new InvalidDataException($"Inventory version {version} has an item layout this editor does not know.");
+    }
+
+    /// <summary>Extra int32 fields per item to try, the one known for <paramref name="version"/> first.</summary>
+    private static IEnumerable<int> ExtraItemFieldCandidates(int version)
+    {
+        var expected = version >= 11 ? 4 : 0;
+        yield return expected;
+        for (var count = 0; count <= 8; count++)
+        {
+            if (count != expected)
+                yield return count;
+        }
+    }
+
+    /// <summary>The equipment read with <paramref name="extraFields"/> extra fields per item, or <c>null</c> when that does not fit.</summary>
+    private static CharacterEquipment? TryReadEquipment(GdcReader reader, int end, int extraFields)
+    {
         var items = new List<EquippedItem>();
         var useAlternate = reader.ReadBool();
         for (var i = 0; i < ArmorSlotCount; i++)
-            AddEquipped(items, (EquipmentSlot)i, 0, reader);
+        {
+            if (!TryAddEquipped(items, (EquipmentSlot)i, 0, reader, extraFields))
+                return null;
+        }
 
         var set1IsAlternate = reader.ReadBool();
-        AddEquipped(items, EquipmentSlot.MainHand, 1, reader);
-        AddEquipped(items, EquipmentSlot.OffHand, 1, reader);
+        if (!TryAddEquipped(items, EquipmentSlot.MainHand, 1, reader, extraFields)
+            || !TryAddEquipped(items, EquipmentSlot.OffHand, 1, reader, extraFields))
+            return null;
 
         var set2IsAlternate = reader.ReadBool();
-        AddEquipped(items, EquipmentSlot.MainHand, 2, reader);
-        AddEquipped(items, EquipmentSlot.OffHand, 2, reader);
+        if (!TryAddEquipped(items, EquipmentSlot.MainHand, 2, reader, extraFields)
+            || !TryAddEquipped(items, EquipmentSlot.OffHand, 2, reader, extraFields))
+            return null;
 
         if (reader.Position != end)
-            throw new InvalidDataException($"Inventory version {version} has a layout this editor does not know.");
+            return null;
 
         // The "alternate" flags mark which set is the alternate one; useAlternate says it is the one in hand.
         var alternateSet = set1IsAlternate && !set2IsAlternate ? 1 : 2;
@@ -215,36 +257,53 @@ public sealed class CharacterSaveParser(IGameTextProvider gameTexts) : ICharacte
         return new CharacterEquipment(items, activeSet);
     }
 
-    private static void AddEquipped(List<EquippedItem> items, EquipmentSlot slot, int weaponSet, GdcReader reader)
+    /// <summary>Reads one slot; <c>false</c> when it does not look like an item (the field count is wrong).</summary>
+    private static bool TryAddEquipped(List<EquippedItem> items, EquipmentSlot slot, int weaponSet, GdcReader reader, int extraFields)
     {
-        var item = ReadItem(reader);
+        var item = ReadItem(reader, extraFields);
         var attached = reader.ReadBool();
+        if (!item.IsEmpty && !item.BaseRecord.StartsWith("records/", StringComparison.OrdinalIgnoreCase))
+            return false;
+
         if (!item.IsEmpty)
             items.Add(new EquippedItem(slot, weaponSet, item, attached));
+        return true;
     }
 
     /// <summary>
     /// <code>
     /// string base, prefix, suffix, modifier, transmute; int32 seed;
     /// string component, completionBonus; int32 componentSeed;
-    /// string augment; int32 unknown, augmentSeed, var1, stackCount
+    /// string augment; int32 unknown, augmentSeed, var1, stackCount,
+    /// [newer inventory versions: <paramref name="extraFields"/> x int32]
     /// </code>
     /// </summary>
-    private static SaveItem ReadItem(GdcReader reader) => new(
-        BaseRecord: reader.ReadString(),
-        PrefixRecord: reader.ReadString(),
-        SuffixRecord: reader.ReadString(),
-        ModifierRecord: reader.ReadString(),
-        TransmuteRecord: reader.ReadString(),
-        Seed: reader.ReadUInt32(),
-        ComponentRecord: reader.ReadString(),
-        CompletionBonusRecord: reader.ReadString(),
-        ComponentSeed: reader.ReadUInt32(),
-        AugmentRecord: reader.ReadString(),
-        Unknown: reader.ReadUInt32(),
-        AugmentSeed: reader.ReadUInt32(),
-        Var1: reader.ReadUInt32(),
-        StackCount: reader.ReadUInt32());
+    private static SaveItem ReadItem(GdcReader reader, int extraFields)
+    {
+        var item = new SaveItem(
+            BaseRecord: reader.ReadString(),
+            PrefixRecord: reader.ReadString(),
+            SuffixRecord: reader.ReadString(),
+            ModifierRecord: reader.ReadString(),
+            TransmuteRecord: reader.ReadString(),
+            Seed: reader.ReadUInt32(),
+            ComponentRecord: reader.ReadString(),
+            CompletionBonusRecord: reader.ReadString(),
+            ComponentSeed: reader.ReadUInt32(),
+            AugmentRecord: reader.ReadString(),
+            Unknown: reader.ReadUInt32(),
+            AugmentSeed: reader.ReadUInt32(),
+            Var1: reader.ReadUInt32(),
+            StackCount: reader.ReadUInt32());
+
+        if (extraFields == 0)
+            return item;
+
+        var extra = new uint[extraFields];
+        for (var i = 0; i < extra.Length; i++)
+            extra[i] = reader.ReadUInt32();
+        return item with { ExtraFields = extra };
+    }
 
     #endregion
 }
