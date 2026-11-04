@@ -16,6 +16,7 @@ using GD.SaveEditor.Services.Notifications;
 using GD.SaveEditor.Services.Saves;
 using GD.SaveEditor.Services.Settings;
 using GD.SaveEditor.Services.Theming;
+using GD.SaveEditor.Services.Updates;
 
 namespace GD.SaveEditor.Extensions;
 
@@ -32,6 +33,7 @@ static class ServiceCollectionExtensions
             services.AddSingleton<ISettingsService, JsonSettingsService>();
             services.AddSingleton<IThemeService, ThemeService>();
             services.AddSingleton<INotificationService, JsonNotificationService>();
+            services.AddSingleton<IUpdateService, GitHubUpdateService>();
 
             // Save files (player.gdc)
             services.AddSingleton<ISaveFolderScanner, SaveFolderScanner>();
@@ -58,6 +60,7 @@ static class ServiceCollectionExtensions
             services.AddSingleton<IDialogService, DialogService>();
             services.AddSingleton<IFolderPickerService, FolderPickerService>();
             services.AddSingleton<IToastService, ToastService>();
+            services.AddSingleton<IAutoUpdater, AutoUpdater>();
 
             // Notification center (bell in the title bar)
             services.AddSingleton<NotificationCenterViewModel>();
