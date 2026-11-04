@@ -48,10 +48,12 @@ public sealed partial class CharacterViewModel : ViewModelBase
     private bool _hasUnsavedChanges;
 
     /// <summary>
-    /// The bytes to write into <c>player.gdc</c>: the file as read with the changes made in the tabs (the iron bits).
+    /// The bytes to write into <c>player.gdc</c>: the file as read with the changes made in the tabs (the iron bits
+    /// and the items moved in the bags).
     /// </summary>
     /// <exception cref="System.IO.InvalidDataException">The changes cannot be written into this file.</exception>
-    public byte[] GetSaveData() => _saveEditor.Apply(Character, new CharacterChanges(Money: Inventory.ChangedMoney));
+    public byte[] GetSaveData() =>
+        _saveEditor.Apply(Character, new CharacterChanges(Money: Inventory.ChangedMoney, Bags: Inventory.ChangedBags));
 
     /// <summary>Call when a tab changed something, so the Save button follows the actual difference to the file.</summary>
     public void RefreshHasUnsavedChanges() =>

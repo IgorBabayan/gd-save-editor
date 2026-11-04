@@ -70,6 +70,9 @@ public sealed class GdcReader
     /// <summary>Every value read so far, in file order; empty unless the reader was created with <c>recordTokens</c>.</summary>
     public IReadOnlyList<GdcToken> Tokens => _tokens ?? (IReadOnlyList<GdcToken>)[];
 
+    /// <summary>Number of values recorded so far: the index the next value will get in <see cref="Tokens"/>.</summary>
+    public int TokenCount => _tokens?.Count ?? 0;
+
     /// <summary>Position and key, to go back after a part that could not be read (see <see cref="Restore"/>).</summary>
     public GdcReaderState Snapshot() => new(_position, _key, _tokens?.Count ?? 0);
 

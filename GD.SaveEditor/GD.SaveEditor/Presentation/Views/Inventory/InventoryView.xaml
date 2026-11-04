@@ -20,6 +20,10 @@
             <SolidColorBrush x:Key="BagFrameBrush" Color="#5A4B2C" />
             <SolidColorBrush x:Key="BagGoldBrush" Color="#D9B45A" />
             <SolidColorBrush x:Key="BagHeaderBrush" Color="#221D17" />
+            <SolidColorBrush x:Key="DropValidBrush" Color="#404CE03C" />
+            <SolidColorBrush x:Key="DropValidBorderBrush" Color="#4CE03C" />
+            <SolidColorBrush x:Key="DropInvalidBrush" Color="#40F1707B" />
+            <SolidColorBrush x:Key="DropInvalidBorderBrush" Color="#F1707B" />
 
             <!-- One 32 x 32 cell, tiled over the bag. -->
             <DrawingBrush x:Key="BagCellBrush"
@@ -93,7 +97,11 @@
                 </DataTemplate.Triggers>
             </DataTemplate>
 
-            <!-- A bag: the cell grid with its items placed on it by cell. -->
+            <!--
+                A bag: the cell grid with its items placed on it by cell. Items are dragged by the mouse; while one is
+                over the bag, the cells it would cover are shown green (it fits) or red (outside the bag or over
+                another item).
+            -->
             <DataTemplate x:Key="BagGridTemplate" DataType="{x:Type inventoryVm:InventoryBagViewModel}">
                 <Border HorizontalAlignment="Left"
                         VerticalAlignment="Top"
@@ -102,7 +110,11 @@
                         SnapsToDevicePixels="True">
                     <Grid Width="{Binding PixelWidth}"
                           Height="{Binding PixelHeight}"
-                          Background="{StaticResource BagCellBrush}">
+                          Background="{StaticResource BagCellBrush}"
+                          AllowDrop="True"
+                          DragOver="OnBagDragOver"
+                          DragLeave="OnBagDragLeave"
+                          Drop="OnBagDrop">
                         <ItemsControl ItemsSource="{Binding Items}" Focusable="False">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
@@ -117,14 +129,49 @@
                             </ItemsControl.ItemContainerStyle>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="{x:Type inventoryVm:InventoryItemViewModel}">
-                                    <ContentControl Width="{Binding Width}"
+                                    <ContentControl x:Name="ItemHost"
+                                                    Width="{Binding Width}"
                                                     Height="{Binding Height}"
                                                     Focusable="False"
                                                     Content="{Binding Item}"
-                                                    ContentTemplate="{StaticResource BagItemTemplate}" />
+                                                    ContentTemplate="{StaticResource BagItemTemplate}"
+                                                    PreviewMouseLeftButtonDown="OnItemMouseDown"
+                                                    PreviewMouseLeftButtonUp="OnItemMouseUp"
+                                                    PreviewMouseMove="OnItemMouseMove" />
+                                    <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding IsSizeKnown}" Value="True">
+                                            <Setter TargetName="ItemHost" Property="Cursor" Value="Hand" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsDragging}" Value="True">
+                                            <Setter TargetName="ItemHost" Property="Opacity" Value="0.35" />
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+
+                        <!-- Drop preview: the cells the dragged item would cover. -->
+                        <Canvas IsHitTestVisible="False">
+                            <Border Canvas.Left="{Binding PreviewLeft}"
+                                    Canvas.Top="{Binding PreviewTop}"
+                                    Width="{Binding PreviewWidth}"
+                                    Height="{Binding PreviewHeight}"
+                                    BorderThickness="1"
+                                    Visibility="{Binding IsPreviewVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="{StaticResource DropInvalidBrush}" />
+                                        <Setter Property="BorderBrush" Value="{StaticResource DropInvalidBorderBrush}" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsPreviewValid}" Value="True">
+                                                <Setter Property="Background" Value="{StaticResource DropValidBrush}" />
+                                                <Setter Property="BorderBrush" Value="{StaticResource DropValidBorderBrush}" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                            </Border>
+                        </Canvas>
 
                         <TextBlock Text="Empty"
                                    HorizontalAlignment="Center"
@@ -142,6 +189,11 @@
                 <Setter Property="Cursor" Value="Hand" />
                 <Setter Property="FocusVisualStyle" Value="{x:Null}" />
                 <Setter Property="ToolTip" Value="{Binding Summary}" />
+                <!-- Holding a dragged item over a tab shows that bag; dropping it there puts it in the first free cell. -->
+                <Setter Property="AllowDrop" Value="True" />
+                <EventSetter Event="DragEnter" Handler="OnBagTabDragEnter" />
+                <EventSetter Event="DragOver" Handler="OnBagTabDragOver" />
+                <EventSetter Event="Drop" Handler="OnBagTabDrop" />
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="ListBoxItem">
@@ -269,6 +321,16 @@
                                        VerticalAlignment="Center"
                                        Foreground="{StaticResource DollTextBrush}" />
 
+                            <!-- Puts every moved item back where the save file has it (shown while items are moved). -->
+                            <Button DockPanel.Dock="Left"
+                                    Margin="8,0,0,0"
+                                    Style="{StaticResource SubtleIconButtonStyle}"
+                                    ToolTip="Put the moved items back"
+                                    Command="{Binding ResetArrangementCommand}"
+                                    Visibility="{Binding IsArrangementChanged, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <wpf:MaterialIcon Kind="Undo" Width="16" Height="16" Foreground="{StaticResource BagGoldBrush}" />
+                            </Button>
+
                             <StackPanel DockPanel.Dock="Right"
                                         Orientation="Horizontal"
                                         VerticalAlignment="Center"
@@ -351,6 +413,15 @@
                                     ContentTemplate="{StaticResource BagGridTemplate}" />
                 </StackPanel>
             </WrapPanel>
+
+            <TextBlock Margin="0,8,0,0"
+                       MaxWidth="700"
+                       HorizontalAlignment="Left"
+                       FontSize="11"
+                       TextWrapping="Wrap"
+                       Text="{Binding MoveHint}"
+                       Foreground="{DynamicResource WarningForegroundBrush}"
+                       Visibility="{Binding HasMoveHint, Converter={StaticResource BooleanToVisibilityConverter}}" />
 
             <TextBlock Margin="0,8,0,0"
                        FontSize="11"

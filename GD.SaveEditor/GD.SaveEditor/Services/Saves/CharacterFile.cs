@@ -83,6 +83,16 @@ public sealed class CharacterFile
     /// <summary>Every value of the file in order; empty unless read with <c>recordTokens</c>.</summary>
     public IReadOnlyList<GdcToken> Tokens { get; private set; } = [];
 
+    /// <summary>
+    /// Where the bags and their items are in <see cref="Tokens"/>, to write the items back in other places;
+    /// <c>null</c> unless read with <c>recordTokens</c> and the inventory has items.
+    /// </summary>
+    public InventoryTokenLayout? InventoryLayout { get; private set; }
+
+    private int _inventoryLengthToken = -1;
+    private int _inventoryEndToken = -1;
+    private List<BagTokenLayout>? _bagLayouts;
+
     /// <summary>Reads a character file.</summary>
     /// <param name="recordTokens">Keep every value (<see cref="Tokens"/>) to encrypt the file again.</param>
     /// <exception cref="InvalidDataException">The header is missing or damaged: not a Grim Dawn character.</exception>
@@ -126,6 +136,9 @@ public sealed class CharacterFile
         }
 
         file.Tokens = reader.Tokens;
+        if (recordTokens && file.RewriteError is null && file._bagLayouts is { Count: > 0 } bags
+            && file._inventoryLengthToken >= 0 && file._inventoryEndToken >= 0)
+            file.InventoryLayout = new InventoryTokenLayout(file._inventoryLengthToken, file._inventoryEndToken, bags);
         return file;
     }
 
@@ -142,11 +155,18 @@ public sealed class CharacterFile
 
         while (reader.Position < reader.Length)
         {
+            var blockToken = reader.TokenCount;
             var (id, end) = reader.ReadBlockStart();
             if (Inventory is null)
+            {
                 ReadBlockBeforeInventory(reader, id, end);
+                if (id == InventoryBlockId)
+                    (_inventoryLengthToken, _inventoryEndToken) = (blockToken + 1, reader.TokenCount);
+            }
             else
+            {
                 ReadBlockAfterInventory(reader, id, end);
+            }
 
             reader.ReadBlockEnd(end);
         }
@@ -372,11 +392,17 @@ public sealed class CharacterFile
             try
             {
                 var bags = new List<InventoryBag>(bagCount);
+                var layouts = new List<BagTokenLayout>(bagCount);
                 for (var i = 0; i < bagCount; i++)
-                    bags.Add(ReadBag(reader, extraFields));
+                {
+                    var (bag, layout) = ReadBag(reader, extraFields);
+                    bags.Add(bag);
+                    layouts.Add(layout);
+                }
 
                 if (TryReadEquipment(reader, end, extraFields) is { } equipment)
                 {
+                    _bagLayouts = layouts;
                     _itemExtraFields = extraFields;
                     Equipment = equipment;
                     Inventory = new CharacterInventory(bags, focusedBag, selectedBag);
@@ -404,27 +430,36 @@ public sealed class CharacterFile
         }
     }
 
-    private static InventoryBag ReadBag(GdcReader reader, int extraFields)
+    /// <summary>A bag and where its values are in the recorded tokens (indices are only meaningful when recording).</summary>
+    private static (InventoryBag Bag, BagTokenLayout Layout) ReadBag(GdcReader reader, int extraFields)
     {
+        var start = reader.TokenCount;
         var (id, end) = reader.ReadBlockStart();
         if (id != 0)
             throw new InvalidDataException($"Unexpected block {id} in the inventory.");
 
         reader.ReadBool();
+        var countToken = reader.TokenCount;
         var count = ReadCount(reader);
         var items = new List<InventoryItem>(count);
+        var itemLayouts = new List<ItemTokenLayout>(count);
         for (var i = 0; i < count; i++)
         {
+            var itemStart = reader.TokenCount;
             var item = ReadItem(reader, extraFields);
+            var xToken = reader.TokenCount;
             var x = reader.ReadInt32();
+            var yToken = reader.TokenCount;
             var y = reader.ReadInt32();
             if (!IsItemRecord(item) || x is < 0 or > 1000 || y is < 0 or > 1000)
                 throw new InvalidDataException("A bag item does not fit the item layout.");
             items.Add(new InventoryItem(item, x, y));
+            itemLayouts.Add(new ItemTokenLayout(itemStart, reader.TokenCount, xToken, yToken));
         }
 
+        var endToken = reader.TokenCount;
         reader.ReadBlockEnd(end);
-        return new InventoryBag(items);
+        return (new InventoryBag(items), new BagTokenLayout(start, countToken, endToken, itemLayouts));
     }
 
     /// <summary>The equipment read with <paramref name="extraFields"/> extra fields per item, or <c>null</c> when that does not fit.</summary>
@@ -727,3 +762,15 @@ public sealed class CharacterFile
 
     #endregion
 }
+
+/// <summary>Values of one bag item in <see cref="CharacterFile.Tokens"/>: <c>[Start, End)</c>, its x and y among them.</summary>
+public sealed record ItemTokenLayout(int Start, int End, int XToken, int YToken);
+
+/// <summary>
+/// Values of one bag block in <see cref="CharacterFile.Tokens"/>: id at <c>Start</c>, length at <c>Start + 1</c>, a
+/// byte at <c>Start + 2</c>, the item count, the items, and the end marker at <c>EndToken</c>.
+/// </summary>
+public sealed record BagTokenLayout(int Start, int CountToken, int EndToken, IReadOnlyList<ItemTokenLayout> Items);
+
+/// <summary>Values of the inventory block: its length, its end marker and its bags (stored one after another).</summary>
+public sealed record InventoryTokenLayout(int LengthToken, int EndToken, IReadOnlyList<BagTokenLayout> Bags);

@@ -2,14 +2,15 @@ using System.Globalization;
 using System.Text;
 using GD.SaveEditor.Services.GameData.Database;
 using GD.SaveEditor.Services.GameData.Textures;
+using GD.SaveEditor.Services.Saves;
 using GD.SaveEditor.Services.Saves.Models;
 
 namespace GD.SaveEditor.Presentation.ViewModels.Inventory;
 
 /// <summary>
 /// The inventory shown under the equipment, laid out like the game's: the main bag on the left with the iron bits
-/// above it, the other bags on the right behind their tab buttons. The iron bits can be changed; the bags are
-/// read-only for now.
+/// above it, the other bags on the right behind their tab buttons. The iron bits can be changed, and items can be
+/// dragged to another place in their bag or into another bag.
 /// </summary>
 public sealed partial class InventoryViewModel : ViewModelBase
 {
@@ -57,10 +58,97 @@ public sealed partial class InventoryViewModel : ViewModelBase
 
     /// <summary>Names and icons are being read from the game data.</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(MoveHint), nameof(HasMoveHint))]
     private bool _isLoading;
 
     /// <summary>Something was changed that is not written to the save file yet.</summary>
-    public bool HasChanges => IsMoneyChanged;
+    public bool HasChanges => IsMoneyChanged || IsArrangementChanged;
+
+    #region Moving items
+
+    /// <summary>The main bag, then the other bags, in the save file's order.</summary>
+    private IEnumerable<InventoryBagViewModel> AllBags => Bags.Prepend(MainBag);
+
+    private IEnumerable<InventoryItemViewModel> AllItems => AllBags.SelectMany(b => b.Items);
+
+    /// <summary>Items can be moved: the bags were read and the editor can write the save file back.</summary>
+    public bool CanMoveItems => HasInventory && Character.CanRewrite;
+
+    /// <summary>Why items cannot be moved (or some of them); <c>null</c> when they all can.</summary>
+    public string? MoveHint =>
+        !HasInventory || IsLoading ? null
+        : !Character.CanRewrite ? $"Items cannot be moved for this character: {Character.RewriteError}"
+        : AllItems.Any(i => !i.IsSizeKnown)
+            ? "Items without an icon cannot be moved: their size comes from the icon. Generate the game database (database button in the title bar) to move them."
+            : null;
+
+    public bool HasMoveHint => MoveHint is not null;
+
+    /// <summary>An item can be picked up: its size is known, so the cells it covers are known.</summary>
+    public bool CanDrag(InventoryItemViewModel item) => CanMoveItems && item.IsSizeKnown;
+
+    /// <summary>
+    /// Puts <paramref name="item"/> on <paramref name="target"/> with its top-left corner at cell
+    /// (<paramref name="x"/>, <paramref name="y"/>); <c>false</c> (nothing changes) when it does not fit there.
+    /// </summary>
+    public bool MoveItem(InventoryItemViewModel item, InventoryBagViewModel target, int x, int y)
+    {
+        if (!CanDrag(item) || !target.CanPlace(item, x, y))
+            return false;
+
+        var source = AllBags.First(b => b.Items.Contains(item));
+        if (!ReferenceEquals(source, target))
+        {
+            source.Remove(item);
+            target.Add(item);
+        }
+
+        item.X = x;
+        item.Y = y;
+        OnArrangementChanged();
+        return true;
+    }
+
+    /// <summary>Some item is in another bag or cell than in the save file.</summary>
+    public bool IsArrangementChanged =>
+        AllBags.Any(b => b.Items.Any(i => i.FromBag != b.Index || i.X != i.OriginalX || i.Y != i.OriginalY));
+
+    /// <summary>
+    /// The contents of every bag to write into the save file; <c>null</c> when no item was moved. Items that stayed in
+    /// their bag keep their order, items moved in come after them.
+    /// </summary>
+    public IReadOnlyList<IReadOnlyList<PlacedItem>>? ChangedBags => IsArrangementChanged
+        ? AllBags.Select(b => (IReadOnlyList<PlacedItem>)b.Items.Select(i => new PlacedItem(i.FromBag, i.FromIndex, i.X, i.Y)).ToList()).ToList()
+        : null;
+
+    /// <summary>Puts every item back where the save file has it.</summary>
+    [RelayCommand]
+    private void ResetArrangement()
+    {
+        var items = AllItems.ToList();
+        foreach (var bag in AllBags)
+        {
+            foreach (var item in bag.Items.ToList())
+                bag.Remove(item);
+        }
+
+        foreach (var item in items.OrderBy(i => i.FromBag).ThenBy(i => i.FromIndex))
+        {
+            item.X = item.OriginalX;
+            item.Y = item.OriginalY;
+            AllBags.First(b => b.Index == item.FromBag).Add(item);
+        }
+
+        OnArrangementChanged();
+    }
+
+    private void OnArrangementChanged()
+    {
+        OnPropertyChanged(nameof(IsArrangementChanged));
+        OnPropertyChanged(nameof(HasChanges));
+    }
+
+    #endregion
 
     #region Iron bits
 
