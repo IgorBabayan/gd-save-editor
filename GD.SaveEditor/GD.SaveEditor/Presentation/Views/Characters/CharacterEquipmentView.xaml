@@ -1,0 +1,287 @@
+<UserControl x:Class="GD.SaveEditor.Presentation.Views.Characters.CharacterEquipmentView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:charactersVm="clr-namespace:GD.SaveEditor.Presentation.ViewModels.Characters"
+             xmlns:wpf="clr-namespace:Material.Icons.WPF;assembly=Material.Icons.WPF"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=charactersVm:CharacterEquipmentViewModel, IsDesignTimeCreatable=False}"
+             d:DesignHeight="700" d:DesignWidth="900">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/GD.SaveEditor;component/Presentation/Views/Characters/ItemResources.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!--
+                One equipment slot. The frame takes the item's rarity color with a soft glow behind the icon;
+                without an icon (database or Items.arc missing) the item name is shown, an empty slot shows its label.
+            -->
+            <DataTemplate x:Key="EquipmentSlotTemplate" DataType="{x:Type charactersVm:EquipmentSlotViewModel}">
+                <Border x:Name="Frame"
+                        CornerRadius="3"
+                        BorderThickness="2"
+                        BorderBrush="{Binding Rarity, Converter={StaticResource RarityBrush}}"
+                        Background="{StaticResource SlotBackgroundBrush}"
+                        SnapsToDevicePixels="True"
+                        ToolTip="{StaticResource ItemToolTip}"
+                        ToolTipService.InitialShowDelay="150"
+                        ToolTipService.ShowDuration="60000">
+                    <Grid ClipToBounds="True">
+                        <Border x:Name="Glow" Background="{Binding Rarity, Converter={StaticResource RarityBrush}, ConverterParameter=Glow}" />
+
+                        <Image x:Name="Icon"
+                               Source="{Binding Icon}"
+                               Margin="4"
+                               Stretch="Uniform"
+                               StretchDirection="DownOnly"
+                               RenderOptions.BitmapScalingMode="HighQuality"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+
+                        <TextBlock x:Name="NameText"
+                                   Text="{Binding Name}"
+                                   Visibility="Collapsed"
+                                   Margin="4"
+                                   FontSize="10"
+                                   TextAlignment="Center"
+                                   TextWrapping="Wrap"
+                                   TextTrimming="CharacterEllipsis"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Foreground="{Binding Rarity, Converter={StaticResource RarityBrush}}" />
+
+                        <TextBlock x:Name="SlotLabel"
+                                   Text="{Binding Label}"
+                                   Visibility="Collapsed"
+                                   Margin="2"
+                                   FontSize="10"
+                                   TextAlignment="Center"
+                                   TextWrapping="Wrap"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Foreground="{StaticResource SlotLabelBrush}" />
+                    </Grid>
+                </Border>
+                <DataTemplate.Triggers>
+                    <DataTrigger Binding="{Binding HasIcon}" Value="False">
+                        <Setter TargetName="NameText" Property="Visibility" Value="Visible" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding IsEmpty}" Value="True">
+                        <Setter TargetName="NameText" Property="Visibility" Value="Collapsed" />
+                        <Setter TargetName="SlotLabel" Property="Visibility" Value="Visible" />
+                        <Setter TargetName="Glow" Property="Visibility" Value="Collapsed" />
+                        <Setter TargetName="Frame" Property="BorderBrush" Value="{StaticResource SlotBorderBrush}" />
+                        <Setter TargetName="Frame" Property="ToolTipService.IsEnabled" Value="False" />
+                    </DataTrigger>
+                </DataTemplate.Triggers>
+            </DataTemplate>
+
+            <Style x:Key="SlotStyle" TargetType="ContentControl">
+                <Setter Property="ContentTemplate" Value="{StaticResource EquipmentSlotTemplate}" />
+                <Setter Property="Focusable" Value="False" />
+            </Style>
+
+            <!-- Swap button of the weapon sets, styled like a small slot. -->
+            <Style x:Key="SwapButtonStyle" TargetType="Button">
+                <Setter Property="Foreground" Value="#D9B45A" />
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Bd"
+                                    CornerRadius="3"
+                                    BorderThickness="2"
+                                    BorderBrush="{StaticResource SlotBorderBrush}"
+                                    Background="{StaticResource SlotBackgroundBrush}"
+                                    SnapsToDevicePixels="True">
+                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bd" Property="BorderBrush" Value="#D9B45A" />
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="Bd" Property="Background" Value="#2A2430" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <!-- No ScrollViewer here: the Character tab scrolls the equipment and the bags together (CharacterView). -->
+    <StackPanel Margin="0,16,0,0">
+
+        <!-- The part of the save file after the header could not be read. -->
+        <Border Margin="0,0,0,12"
+                Padding="12,8"
+                CornerRadius="6"
+                BorderThickness="1"
+                BorderBrush="{DynamicResource ErrorForegroundBrush}"
+                Visibility="{Binding HasError, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <TextBlock Text="{Binding ErrorText}" TextWrapping="Wrap" Foreground="{DynamicResource ErrorForegroundBrush}" />
+        </Border>
+
+        <!-- Names and icons need database.db. -->
+        <Border Margin="0,0,0,12"
+                Padding="12,8"
+                CornerRadius="6"
+                BorderThickness="1"
+                BorderBrush="{DynamicResource WarningForegroundBrush}"
+                Visibility="{Binding ShowDatabaseHint, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <TextBlock TextWrapping="Wrap"
+                       Foreground="{DynamicResource WarningForegroundBrush}"
+                       Text="Items are shown by their record names. Generate the game database (database button in the title bar) to see item names and icons." />
+        </Border>
+
+        <WrapPanel Orientation="Horizontal">
+
+            <!-- ===== Equipment screen ===== -->
+            <Border Margin="0,0,16,16"
+                    Padding="14"
+                    CornerRadius="6"
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource ControlBorderBrush}"
+                    Background="{StaticResource DollBackgroundBrush}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="84" />
+                        <ColumnDefinition Width="12" />
+                        <ColumnDefinition Width="300" />
+                        <ColumnDefinition Width="12" />
+                        <ColumnDefinition Width="84" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Left column: weapon, chest, legs -->
+                    <StackPanel Grid.Column="0">
+                        <ContentControl Style="{StaticResource SlotStyle}" Content="{Binding MainHand}" Width="84" Height="150" />
+                        <ContentControl Style="{StaticResource SlotStyle}" Content="{Binding Chest}" Width="84" Height="130" Margin="0,8,0,0" />
+                        <ContentControl Style="{StaticResource SlotStyle}" Content="{Binding Legs}" Width="84" Height="130" Margin="0,8,0,0" />
+                    </StackPanel>
+
+                    <!-- Center: relic / head / amulet and medal, the character, rings and belt -->
+                    <Grid Grid.Column="2">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="84" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="44" />
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Center">
+                            <StackPanel>
+                                <Button Style="{StaticResource SwapButtonStyle}"
+                                        Width="40" Height="40"
+                                        Command="{Binding SwapWeaponSetCommand}"
+                                        ToolTip="Show the other weapon set">
+                                    <wpf:MaterialIcon Kind="SwapHorizontal" Width="22" Height="22" />
+                                </Button>
+                                <ContentControl Style="{StaticResource SlotStyle}" Content="{Binding Relic}" Width="40" Height="40" Margin="0,4,0,0" />
+                            </StackPanel>
+                            <ContentControl Style="{StaticResource SlotStyle}" Content="{Binding Head}" Width="84" Height="84" Margin="10,0" />
+                            <StackPanel>
+                                <ContentControl Style="{StaticResource SlotStyle}" Content="{Binding Amulet}" Width="40" Height="40" />
+                                <ContentControl Style="{StaticResource SlotStyle}" Content="{Binding Medal}" Width="40" Height="40" Margin="0,4,0,0" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- The character (the game's 3D model is replaced by name, class and weapon set). -->
+                        <Border Grid.Row="1" Margin="0,8" CornerRadius="4" BorderThickness="1" BorderBrush="#2A2430">
+                            <Border.Background>
+                                <RadialGradientBrush GradientOrigin="0.5,0.4" Center="0.5,0.4" RadiusX="0.7" RadiusY="0.6">
+                                    <GradientStop Color="#3A2026" Offset="0" />
+                                    <GradientStop Color="#1C1416" Offset="0.6" />
+                                    <GradientStop Color="#120E0D" Offset="1" />
+                                </RadialGradientBrush>
+                            </Border.Background>
+                            <Grid>
+                                <wpf:MaterialIcon Kind="ShieldSwordOutline"
+                                                  Width="150" Height="150"
+                                                  Opacity="0.08"
+                                                  Foreground="{StaticResource DollTextBrush}"
+                                                  HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center" />
+                                <StackPanel VerticalAlignment="Center" Margin="12">
+                                    <TextBlock Text="{Binding Character.CharacterName}"
+                                               FontSize="20"
+                                               FontWeight="SemiBold"
+                                               TextAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"
+                                               Foreground="{StaticResource DollTextBrush}" />
+                                    <TextBlock Text="{Binding Character.Summary}"
+                                               Margin="0,4,0,0"
+                                               FontSize="13"
+                                               TextAlignment="Center"
+                                               Foreground="{StaticResource DollSecondaryTextBrush}" />
+                                    <Border Style="{StaticResource BadgeBorderStyle}"
+                                            Margin="0,8,0,0"
+                                            HorizontalAlignment="Center"
+                                            Visibility="{Binding Character.Hardcore, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                        <TextBlock Text="Hardcore" FontSize="11" Foreground="{DynamicResource WarningForegroundBrush}" />
+                                    </Border>
+                                    <TextBlock Text="{Binding WeaponSetText}"
+                                               Margin="0,16,0,0"
+                                               FontSize="12"
+                                               TextAlignment="Center"
+                                               Foreground="#D9B45A" />
+                                    <TextBlock Text="Reading item names and icons…"
+                                               Margin="0,6,0,0"
+                                               FontSize="11"
+                                               TextAlignment="Center"
+                                               Foreground="{StaticResource DollSecondaryTextBrush}"
+                                               Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center">
+                            <ContentControl Style="{StaticResource SlotStyle}" Content="{Binding Ring1}" Width="44" Height="44" />
+                            <ContentControl Style="{StaticResource SlotStyle}" Content="{Binding Waist}" Width="120" Height="44" Margin="8,0" />
+                            <ContentControl Style="{StaticResource SlotStyle}" Content="{Binding Ring2}" Width="44" Height="44" />
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Right column: off hand, shoulders, hands, feet -->
+                    <StackPanel Grid.Column="4">
+                        <ContentControl Style="{StaticResource SlotStyle}" Content="{Binding OffHand}" Width="84" Height="150" />
+                        <ContentControl Style="{StaticResource SlotStyle}" Content="{Binding Shoulders}" Width="84" Height="84" Margin="0,8,0,0" />
+                        <ContentControl Style="{StaticResource SlotStyle}" Content="{Binding Hands}" Width="84" Height="84" Margin="0,8,0,0" />
+                        <ContentControl Style="{StaticResource SlotStyle}" Content="{Binding Feet}" Width="84" Height="84" Margin="0,8,0,0" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- ===== Attributes ===== -->
+            <Border MinWidth="260"
+                    MinHeight="0"
+                    Margin="0,0,0,16"
+                    Padding="16,12"
+                    VerticalAlignment="Top"
+                    Style="{StaticResource InventorySectionBorderStyle}"
+                    Visibility="{Binding HasStats, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <StackPanel>
+                    <TextBlock Text="Attributes" Style="{StaticResource SectionHeaderTextStyle}" Margin="0,0,0,8" />
+                    <ItemsControl ItemsSource="{Binding Stats}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type charactersVm:CharacterStatLine}">
+                                <Grid Margin="0,3">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding Label}" Margin="0,0,24,0" Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                                    <TextBlock Grid.Column="1" Text="{Binding Value}" FontWeight="SemiBold" Foreground="{DynamicResource WindowForegroundBrush}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+        </WrapPanel>
+    </StackPanel>
+</UserControl>

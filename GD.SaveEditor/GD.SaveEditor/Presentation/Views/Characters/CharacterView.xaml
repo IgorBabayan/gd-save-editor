@@ -1,0 +1,33 @@
+<UserControl x:Class="GD.SaveEditor.Presentation.Views.Characters.CharacterView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:charactersVm="clr-namespace:GD.SaveEditor.Presentation.ViewModels.Characters"
+             xmlns:local="clr-namespace:GD.SaveEditor.Presentation.Views.Characters"
+             xmlns:inventoryViews="clr-namespace:GD.SaveEditor.Presentation.Views.Inventory"
+             xmlns:waypointsViews="clr-namespace:GD.SaveEditor.Presentation.Views.Waypoints"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=charactersVm:CharacterViewModel, IsDesignTimeCreatable=False}"
+             d:DesignHeight="700" d:DesignWidth="900">
+
+    <!--
+        Details of the selected character. The TabControl itself stays the same while the selection changes
+        (only its DataContext is replaced), so the open tab is kept when switching between characters.
+    -->
+    <TabControl x:Name="Tabs" Style="{StaticResource UnderlineTabControlStyle}">
+        <!-- Equipment and attributes, with the bags under them like in the game; both scroll together. -->
+        <TabItem x:Name="CharacterTab" Header="Character">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <local:CharacterEquipmentView DataContext="{Binding Equipment}" />
+                    <inventoryViews:InventoryView DataContext="{Binding Inventory}" />
+                </StackPanel>
+            </ScrollViewer>
+        </TabItem>
+
+        <TabItem x:Name="WaypointsTab" Header="Waypoints">
+            <waypointsViews:WaypointsView DataContext="{Binding Waypoints}" />
+        </TabItem>
+    </TabControl>
+</UserControl>

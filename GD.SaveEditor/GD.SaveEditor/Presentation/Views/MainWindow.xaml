@@ -1,0 +1,497 @@
+﻿<Window x:Class="GD.SaveEditor.Presentation.Views.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        xmlns:shellVm="clr-namespace:GD.SaveEditor.Presentation.ViewModels.Shell"
+        xmlns:models="clr-namespace:GD.SaveEditor.Services.Saves.Models"
+        xmlns:notifications="clr-namespace:GD.SaveEditor.Services.Notifications"
+        xmlns:wpf="clr-namespace:Material.Icons.WPF;assembly=Material.Icons.WPF"
+        xmlns:toastViews="clr-namespace:GD.SaveEditor.Presentation.Views.Toasts"
+        xmlns:characterViews="clr-namespace:GD.SaveEditor.Presentation.Views.Characters"
+        mc:Ignorable="d"
+        d:DataContext="{d:DesignInstance Type=shellVm:MainViewModel, IsDesignTimeCreatable=False}"
+        Title="Grim Dawn Save Editor" Height="940" Width="1150"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        Foreground="{DynamicResource WindowForegroundBrush}">
+
+    <!--
+        WindowChrome removes the native title bar but keeps native behaviour, like any Windows window:
+        Aero Snap, drag to move, double-click the title bar to maximize / restore, Alt+Space menu, resizing at the edges.
+        Minimize / Maximize-Restore / Close are drawn in the title bar (see MainWindow.xaml.cs).
+    -->
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="32"
+                            ResizeBorderThickness="6"
+                            CornerRadius="0"
+                            GlassFrameThickness="0"
+                            UseAeroCaptionButtons="False" />
+    </shell:WindowChrome.WindowChrome>
+
+    <Window.Resources>
+        <!-- One row of the character list (shared by the Softcore and Hardcore tabs). -->
+        <DataTemplate x:Key="CharacterListItemTemplate" DataType="{x:Type models:CharacterSave}">
+            <StackPanel VerticalAlignment="Center">
+                <DockPanel LastChildFill="False">
+                    <TextBlock DockPanel.Dock="Left"
+                               Text="{Binding CharacterName}"
+                               FontSize="14"
+                               FontWeight="SemiBold"
+                               TextTrimming="CharacterEllipsis" />
+                    <Border DockPanel.Dock="Right"
+                            Style="{StaticResource BadgeBorderStyle}"
+                            ToolTip="Solo Self-Found"
+                            Visibility="{Binding SoloSelfFound, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <TextBlock Text="SSF"
+                                   FontSize="10"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource WarningForegroundBrush}" />
+                    </Border>
+                </DockPanel>
+                <TextBlock Margin="0,2,0,0"
+                           Style="{StaticResource SecondaryTextStyle}"
+                           TextTrimming="CharacterEllipsis"
+                           Text="{Binding Summary}" />
+                <TextBlock Margin="0,2,0,0"
+                           FontSize="11"
+                           Style="{StaticResource SecondaryTextStyle}"
+                           Text="{Binding LastPlayedLocal, StringFormat='Last played {0:g}', TargetNullValue='Never played'}" />
+            </StackPanel>
+        </DataTemplate>
+    </Window.Resources>
+
+    <Window.CommandBindings>
+        <CommandBinding Command="{x:Static SystemCommands.MinimizeWindowCommand}" Executed="OnMinimizeExecuted" />
+        <CommandBinding Command="{x:Static SystemCommands.MaximizeWindowCommand}" Executed="OnMaximizeExecuted" />
+        <CommandBinding Command="{x:Static SystemCommands.RestoreWindowCommand}" Executed="OnRestoreExecuted" />
+        <CommandBinding Command="{x:Static SystemCommands.CloseWindowCommand}" Executed="OnCloseExecuted" />
+    </Window.CommandBindings>
+
+    <Window.InputBindings>
+        <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
+        <KeyBinding Gesture="F5" Command="{Binding ReloadCommand}" />
+    </Window.InputBindings>
+
+    <Border x:Name="RootBorder"
+            BorderBrush="{DynamicResource WindowBorderBrush}"
+            BorderThickness="1">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="32" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- ===== Title bar ===== -->
+            <Grid x:Name="TitleBar" Grid.Row="0" Background="{DynamicResource TitleBarBackgroundBrush}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />  <!-- icon + title -->
+                    <ColumnDefinition Width="*" />     <!-- free drag area -->
+                    <ColumnDefinition Width="Auto" />  <!-- custom buttons -->
+                    <ColumnDefinition Width="Auto" />  <!-- min / max / close -->
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                    <TextBlock x:Name="TitleText"
+                               Text="{Binding Title, RelativeSource={RelativeSource AncestorType=Window}}"
+                               FontSize="12"
+                               VerticalAlignment="Center" />
+                </StackPanel>
+
+                <!-- Custom buttons placed next to the standard caption buttons -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                    <!-- Writes the changes of the selected character into its save file; enabled while there are any. -->
+                    <Button x:Name="SaveButton"
+                            Style="{StaticResource TitleBarToolButtonStyle}"
+                            ToolTip="Save changes (Ctrl+S)"
+                            AutomationProperties.Name="Save changes"
+                            Command="{Binding SaveCommand}">
+                        <wpf:MaterialIcon Kind="ContentSaveOutline" Width="18" Height="18" />
+                    </Button>
+
+                    <!-- Reads the selected character's save file again (e.g. after the game wrote it); asks before discarding unsaved changes. -->
+                    <Button x:Name="ReloadButton"
+                            Style="{StaticResource TitleBarToolButtonStyle}"
+                            ToolTip="Reload the selected character (F5)"
+                            AutomationProperties.Name="Reload the selected character"
+                            Command="{Binding ReloadCommand}">
+                        <wpf:MaterialIcon Kind="Refresh" Width="18" Height="18" />
+                    </Button>
+
+                    <!-- Downloads the game files and generates database.db, or migrates it with what it does not have yet. -->
+                    <Button x:Name="DatabaseButton"
+                            Style="{StaticResource TitleBarToolButtonStyle}"
+                            ToolTip="Generate / update database"
+                            AutomationProperties.Name="Generate or update database"
+                            Command="{Binding GenerateDatabaseCommand}">
+                        <wpf:MaterialIcon Kind="DatabaseRefreshOutline" Width="18" Height="18" />
+                    </Button>
+
+                    <!--
+                        Notification center. While the popup is open the toggle is not hit-testable:
+                        a click on it then only closes the popup (StaysOpen=False) instead of reopening it.
+                    -->
+                    <ToggleButton x:Name="NotificationsButton"
+                                  DataContext="{Binding NotificationCenter}"
+                                  Style="{StaticResource TitleBarToggleButtonStyle}"
+                                  ToolTip="{Binding BellToolTip}"
+                                  IsChecked="{Binding IsOpen, Mode=TwoWay}"
+                                  IsHitTestVisible="{Binding IsOpen, ElementName=NotificationsPopup, Converter={StaticResource InverseBooleanConverter}}">
+                        <wpf:MaterialIcon Width="18" Height="18">
+                            <wpf:MaterialIcon.Style>
+                                <Style TargetType="wpf:MaterialIcon">
+                                    <Setter Property="Kind" Value="BellOutline" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasUnread}" Value="True">
+                                            <Setter Property="Kind" Value="Bell" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </wpf:MaterialIcon.Style>
+                        </wpf:MaterialIcon>
+                    </ToggleButton>
+
+                    <Popup x:Name="NotificationsPopup"
+                           DataContext="{Binding NotificationCenter}"
+                           PlacementTarget="{Binding ElementName=NotificationsButton}"
+                           Placement="Custom"
+                           StaysOpen="False"
+                           AllowsTransparency="True"
+                           PopupAnimation="Fade"
+                           IsOpen="{Binding IsOpen, Mode=TwoWay}">
+                        <!-- Outer 8px margin leaves room for the shadow; MainWindow.PlaceNotificationsPopup compensates for it. -->
+                        <Grid Margin="8" Width="380">
+                            <!-- Shadow is drawn by a separate element so the content text stays crisp. -->
+                            <Border CornerRadius="8" Background="{DynamicResource WindowBackgroundBrush}">
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="16" ShadowDepth="2" Direction="270" Opacity="0.35" Color="Black" />
+                                </Border.Effect>
+                            </Border>
+
+                            <Border CornerRadius="8"
+                                    BorderThickness="1"
+                                    BorderBrush="{DynamicResource ControlBorderBrush}"
+                                    Background="{DynamicResource WindowBackgroundBrush}">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+
+                                    <!-- Header -->
+                                    <DockPanel Grid.Row="0" Margin="14,10,8,10" LastChildFill="True">
+                                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <Button Content="Mark all as read"
+                                                    Style="{StaticResource TextLinkButtonStyle}"
+                                                    Command="{Binding MarkAllAsReadCommand}" />
+                                            <Button Content="Clear all"
+                                                    Style="{StaticResource TextLinkButtonStyle}"
+                                                    Command="{Binding ClearAllCommand}" />
+                                        </StackPanel>
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <TextBlock Text="Notifications" Style="{StaticResource SectionHeaderTextStyle}" />
+                                            <Border Margin="8,0,0,0"
+                                                    Padding="6,0"
+                                                    MinWidth="18"
+                                                    Height="18"
+                                                    CornerRadius="9"
+                                                    VerticalAlignment="Center"
+                                                    Background="{DynamicResource AccentBrush}"
+                                                    Visibility="{Binding HasUnread, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                <TextBlock Text="{Binding UnreadCount}"
+                                                           FontSize="11"
+                                                           FontWeight="SemiBold"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center"
+                                                           Foreground="{DynamicResource AccentForegroundBrush}" />
+                                            </Border>
+                                        </StackPanel>
+                                    </DockPanel>
+
+                                    <Rectangle Grid.Row="1" Height="1" Fill="{DynamicResource WindowBorderBrush}" />
+
+                                    <!-- List / empty state -->
+                                    <Grid Grid.Row="2">
+                                        <TextBlock Margin="16,28"
+                                                   HorizontalAlignment="Center"
+                                                   Text="No notifications yet."
+                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                   Visibility="{Binding IsEmpty, Converter={StaticResource BooleanToVisibilityConverter}}" />
+
+                                        <ScrollViewer MaxHeight="440"
+                                                      VerticalScrollBarVisibility="Auto"
+                                                      HorizontalScrollBarVisibility="Disabled"
+                                                      Visibility="{Binding HasNotifications, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                            <ItemsControl Margin="4" ItemsSource="{Binding Notifications}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate DataType="{x:Type notifications:Notification}">
+                                                        <Grid Margin="0,1">
+                                                            <!-- Clicking the row marks it as read. -->
+                                                            <Button Style="{StaticResource ListRowButtonStyle}"
+                                                                    Command="{Binding DataContext.MarkAsReadCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                    CommandParameter="{Binding}">
+                                                                <Grid>
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="12" />   <!-- unread dot -->
+                                                                        <ColumnDefinition Width="Auto" /> <!-- severity icon -->
+                                                                        <ColumnDefinition Width="*" />    <!-- text -->
+                                                                        <ColumnDefinition Width="28" />   <!-- room for the remove button -->
+                                                                    </Grid.ColumnDefinitions>
+
+                                                                    <Ellipse x:Name="UnreadDot"
+                                                                             Grid.Column="0"
+                                                                             Width="6"
+                                                                             Height="6"
+                                                                             Margin="0,7,0,0"
+                                                                             HorizontalAlignment="Left"
+                                                                             VerticalAlignment="Top"
+                                                                             Fill="{DynamicResource AccentBrush}" />
+
+                                                                    <wpf:MaterialIcon x:Name="SeverityIcon"
+                                                                                      Grid.Column="1"
+                                                                                      Width="18"
+                                                                                      Height="18"
+                                                                                      Margin="0,0,10,0"
+                                                                                      VerticalAlignment="Top"
+                                                                                      Kind="InformationOutline"
+                                                                                      Foreground="{DynamicResource AccentBrush}" />
+
+                                                                    <StackPanel Grid.Column="2">
+                                                                        <TextBlock x:Name="NotificationTitle"
+                                                                                   Text="{Binding Title}"
+                                                                                   FontSize="13"
+                                                                                   FontWeight="SemiBold"
+                                                                                   TextWrapping="Wrap" />
+                                                                        <TextBlock Margin="0,2,0,0"
+                                                                                   Text="{Binding Message}"
+                                                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                                                   Visibility="{Binding HasMessage, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                                                        <TextBlock Margin="0,4,0,0"
+                                                                                   FontSize="11"
+                                                                                   Style="{StaticResource SecondaryTextStyle}"
+                                                                                   Text="{Binding CreatedAtLocal, StringFormat='{}{0:g}'}" />
+                                                                    </StackPanel>
+                                                                </Grid>
+                                                            </Button>
+
+                                                            <!-- Sibling of the row button (not nested), so its click does not also mark the row as read. -->
+                                                            <Button Margin="0,6,6,0"
+                                                                    HorizontalAlignment="Right"
+                                                                    VerticalAlignment="Top"
+                                                                    ToolTip="Remove"
+                                                                    Style="{StaticResource SubtleIconButtonStyle}"
+                                                                    Command="{Binding DataContext.RemoveCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                                    CommandParameter="{Binding}">
+                                                                <wpf:MaterialIcon Kind="Close" Width="14" Height="14" />
+                                                            </Button>
+                                                        </Grid>
+
+                                                        <DataTemplate.Triggers>
+                                                            <DataTrigger Binding="{Binding IsRead}" Value="True">
+                                                                <Setter TargetName="UnreadDot" Property="Visibility" Value="Hidden" />
+                                                                <Setter TargetName="NotificationTitle" Property="FontWeight" Value="Normal" />
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Severity}" Value="{x:Static notifications:NotificationSeverity.Success}">
+                                                                <Setter TargetName="SeverityIcon" Property="Kind" Value="CheckCircleOutline" />
+                                                                <Setter TargetName="SeverityIcon" Property="Foreground" Value="{DynamicResource SuccessForegroundBrush}" />
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Severity}" Value="{x:Static notifications:NotificationSeverity.Warning}">
+                                                                <Setter TargetName="SeverityIcon" Property="Kind" Value="AlertOutline" />
+                                                                <Setter TargetName="SeverityIcon" Property="Foreground" Value="{DynamicResource WarningForegroundBrush}" />
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Severity}" Value="{x:Static notifications:NotificationSeverity.Error}">
+                                                                <Setter TargetName="SeverityIcon" Property="Kind" Value="AlertCircleOutline" />
+                                                                <Setter TargetName="SeverityIcon" Property="Foreground" Value="{DynamicResource ErrorForegroundBrush}" />
+                                                            </DataTrigger>
+                                                        </DataTemplate.Triggers>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </ScrollViewer>
+                                    </Grid>
+                                </Grid>
+                            </Border>
+                        </Grid>
+                    </Popup>
+
+                    <Button x:Name="SettingsButton"
+                            Style="{StaticResource TitleBarToolButtonStyle}"
+                            ToolTip="Settings"
+                            Content="&#xE713;"
+                            Command="{Binding OpenSettingsCommand}" />
+                    <Rectangle Width="1" Margin="4,8" Fill="{DynamicResource WindowBorderBrush}" />
+                </StackPanel>
+
+                <!-- Standard caption buttons -->
+                <StackPanel Grid.Column="3" Orientation="Horizontal">
+                    <Button Style="{StaticResource CaptionButtonStyle}"
+                            ToolTip="Minimize"
+                            Content="&#xE921;"
+                            Command="{x:Static SystemCommands.MinimizeWindowCommand}" />
+                    <!-- Maximize, or Restore while maximized (glyph and tooltip follow the window state, as in Windows). -->
+                    <Button x:Name="MaximizeRestoreButton"
+                            Click="OnMaximizeRestoreClick">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource CaptionButtonStyle}">
+                                <Setter Property="Content" Value="&#xE922;" />
+                                <Setter Property="ToolTip" Value="Maximize" />
+                                <Setter Property="AutomationProperties.Name" Value="Maximize" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}" Value="Maximized">
+                                        <Setter Property="Content" Value="&#xE923;" />
+                                        <Setter Property="ToolTip" Value="Restore Down" />
+                                        <Setter Property="AutomationProperties.Name" Value="Restore Down" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                    <Button Style="{StaticResource CloseCaptionButtonStyle}"
+                            ToolTip="Close"
+                            Content="&#xE8BB;"
+                            Command="{x:Static SystemCommands.CloseWindowCommand}" />
+                </StackPanel>
+            </Grid>
+
+            <!-- ===== Window content: characters (left) | details of the selected character (right) ===== -->
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <!-- Characters take a quarter of the width; the splitter between the columns resizes them. -->
+                    <ColumnDefinition Width="1*" MinWidth="220" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="3*" MinWidth="300" />
+                </Grid.ColumnDefinitions>
+
+                <!-- ===== Characters ===== -->
+                <Grid Grid.Column="0" Background="{DynamicResource TitleBarBackgroundBrush}">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0"
+                               Margin="16,14,16,8"
+                               Text="Characters"
+                               Style="{StaticResource SectionHeaderTextStyle}" />
+
+                    <!-- Softcore / Hardcore tabs; each keeps its own selection. -->
+                    <TabControl Grid.Row="1"
+                                Margin="16,0"
+                                Style="{StaticResource PillTabControlStyle}"
+                                SelectedIndex="{Binding SelectedCharacterTabIndex, Mode=TwoWay}"
+                                Visibility="{Binding HasCharacters, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <TabItem Header="Softcore">
+                            <!-- Negative side margins undo the TabControl margin, so the list spans the whole panel. -->
+                            <Grid Margin="-16,10,-16,0">
+                                <ListBox Style="{StaticResource PlainListBoxStyle}"
+                                         ItemContainerStyle="{StaticResource ListRowItemStyle}"
+                                         ItemTemplate="{StaticResource CharacterListItemTemplate}"
+                                         ItemsSource="{Binding SoftcoreCharacters}"
+                                         SelectedItem="{Binding SelectedSoftcoreCharacter, Mode=TwoWay}"
+                                         Visibility="{Binding HasVisibleSoftcoreCharacters, Converter={StaticResource BooleanToVisibilityConverter}}" />
+
+                                <TextBlock Margin="16,8" VerticalAlignment="Top"
+                                           Text="No softcore characters to show."
+                                           TextWrapping="Wrap"
+                                           Style="{StaticResource SecondaryTextStyle}"
+                                           Visibility="{Binding HasVisibleSoftcoreCharacters, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
+                            </Grid>
+                        </TabItem>
+
+                        <TabItem Header="Hardcore">
+                            <!-- Negative side margins undo the TabControl margin, so the list spans the whole panel. -->
+                            <Grid Margin="-16,10,-16,0">
+                                <ListBox Style="{StaticResource PlainListBoxStyle}"
+                                         ItemContainerStyle="{StaticResource ListRowItemStyle}"
+                                         ItemTemplate="{StaticResource CharacterListItemTemplate}"
+                                         ItemsSource="{Binding HardcoreCharacters}"
+                                         SelectedItem="{Binding SelectedHardcoreCharacter, Mode=TwoWay}"
+                                         Visibility="{Binding HasVisibleHardcoreCharacters, Converter={StaticResource BooleanToVisibilityConverter}}" />
+
+                                <TextBlock Margin="16,8" VerticalAlignment="Top"
+                                           Text="No hardcore characters to show."
+                                           TextWrapping="Wrap"
+                                           Style="{StaticResource SecondaryTextStyle}"
+                                           Visibility="{Binding HasVisibleHardcoreCharacters, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
+                            </Grid>
+                        </TabItem>
+                    </TabControl>
+
+                    <!-- Empty / loading states -->
+                    <StackPanel Grid.Row="1" Margin="16,8" VerticalAlignment="Top"
+                                Visibility="{Binding ShowNoSaveFolder, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <TextBlock Text="No save folder selected." TextWrapping="Wrap" Style="{StaticResource SecondaryTextStyle}" />
+                        <Button Margin="0,12,0,0"
+                                HorizontalAlignment="Left"
+                                Content="Open settings"
+                                Style="{StaticResource DialogButtonStyle}"
+                                Command="{Binding OpenSettingsCommand}" />
+                    </StackPanel>
+
+                    <TextBlock Grid.Row="1" Margin="16,8" VerticalAlignment="Top"
+                               Text="Loading characters…"
+                               Style="{StaticResource SecondaryTextStyle}"
+                               Visibility="{Binding ShowLoading, Converter={StaticResource BooleanToVisibilityConverter}}" />
+
+                    <TextBlock Grid.Row="1" Margin="16,8" VerticalAlignment="Top"
+                               Text="No characters found in the save folder."
+                               TextWrapping="Wrap"
+                               Style="{StaticResource SecondaryTextStyle}"
+                               Visibility="{Binding ShowNoCharacters, Converter={StaticResource BooleanToVisibilityConverter}}" />
+
+                    <!-- Files that could not be read -->
+                    <TextBlock Grid.Row="2"
+                               Margin="16,8,16,12"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource WarningForegroundBrush}"
+                               Text="{Binding LoadErrors.Count, StringFormat='{}{0} save file(s) could not be read'}"
+                               Visibility="{Binding HasLoadErrors, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <TextBlock.ToolTip>
+                            <ItemsControl ItemsSource="{Binding LoadErrors}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type models:SaveFileError}">
+                                        <TextBlock Margin="0,2">
+                                            <Run Text="{Binding FilePath, Mode=OneWay}" FontWeight="SemiBold" />
+                                            <Run Text=": " />
+                                            <Run Text="{Binding Message, Mode=OneWay}" />
+                                        </TextBlock>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </TextBlock.ToolTip>
+                    </TextBlock>
+                </Grid>
+
+                <!-- 1px divider with a wider, invisible grab area for resizing. -->
+                <Rectangle Grid.Column="1" Width="1" Fill="{DynamicResource WindowBorderBrush}" />
+                <GridSplitter Grid.Column="1"
+                              Width="5"
+                              Margin="-2,0"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Stretch"
+                              ResizeBehavior="PreviousAndNext"
+                              Background="Transparent" />
+
+                <!-- ===== Details of the selected character: Character / Waypoints tabs ===== -->
+                <Grid Grid.Column="2">
+                    <TextBlock HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               Text="Select a character to see its details."
+                               Style="{StaticResource SecondaryTextStyle}"
+                               Visibility="{Binding ShowSelectCharacterHint, Converter={StaticResource BooleanToVisibilityConverter}}" />
+
+                    <characterViews:CharacterView DataContext="{Binding CharacterDetails}"
+                                                  Margin="24,8,24,16"
+                                                  Visibility="{Binding DataContext.HasSelectedCharacter, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                </Grid>
+            </Grid>
+
+            <!-- ===== Toasts (bottom-right, above the content) ===== -->
+            <toastViews:ToastHost Grid.Row="1" Panel.ZIndex="10" />
+        </Grid>
+    </Border>
+</Window>
