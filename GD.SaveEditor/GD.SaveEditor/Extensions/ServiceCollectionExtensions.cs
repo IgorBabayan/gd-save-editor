@@ -1,5 +1,6 @@
 using GD.SaveEditor.Presentation.Services;
 using GD.SaveEditor.Presentation.Services.Toasts;
+using GD.SaveEditor.Presentation.ViewModels.Characters;
 using GD.SaveEditor.Presentation.ViewModels.Database;
 using GD.SaveEditor.Presentation.ViewModels.Notifications;
 using GD.SaveEditor.Presentation.ViewModels.Settings;
@@ -9,6 +10,7 @@ using GD.SaveEditor.Presentation.Views.Database;
 using GD.SaveEditor.Presentation.Views.Settings;
 using GD.SaveEditor.Services.GameData;
 using GD.SaveEditor.Services.GameData.Database;
+using GD.SaveEditor.Services.GameData.Textures;
 using GD.SaveEditor.Services.Notifications;
 using GD.SaveEditor.Services.Saves;
 using GD.SaveEditor.Services.Settings;
@@ -41,6 +43,8 @@ static class ServiceCollectionExtensions
             services.AddSingleton<IGameDatabaseMigrator, GameDatabaseMigrator>();
             services.AddSingleton<IDatabaseGenerator, DatabaseGenerator>();
             services.AddSingleton<IGameTextProvider, GameTextProvider>();
+            services.AddSingleton<IGameItemProvider, GameItemProvider>();
+            services.AddSingleton<IGameIconProvider, GameIconProvider>();
 
             return services;
         }
@@ -54,6 +58,9 @@ static class ServiceCollectionExtensions
 
             // Notification center (bell in the title bar)
             services.AddSingleton<NotificationCenterViewModel>();
+
+            // Character details (Character / Inventory / Waypoints tabs)
+            services.AddSingleton<CharacterViewModelFactory>();
 
             // Shell
             services.AddSingleton<MainViewModel>();

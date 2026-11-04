@@ -1,6 +1,6 @@
 namespace GD.SaveEditor.Services.Saves.Models;
 
-/// <summary>A Grim Dawn character read from its <c>player.gdc</c> (the header part for now).</summary>
+/// <summary>A Grim Dawn character read from its <c>player.gdc</c>: the header, progress and equipment.</summary>
 public sealed record CharacterSave
 {
     /// <summary>Full path of <c>player.gdc</c>.</summary>
@@ -33,6 +33,18 @@ public sealed record CharacterSave
     public DateTimeOffset? LastPlayed { get; init; }
 
     public DateTime? LastPlayedLocal => LastPlayed?.LocalDateTime;
+
+    /// <summary>Attributes and unspent points; <c>null</c> when that part of the file could not be read.</summary>
+    public CharacterStats? Stats { get; init; }
+
+    /// <summary>Equipped items; <c>null</c> when that part of the file could not be read (see <see cref="DetailsError"/>).</summary>
+    public CharacterEquipment? Equipment { get; init; }
+
+    /// <summary>
+    /// Why the part after the header (stats, equipment) could not be read; <c>null</c> when it was read.
+    /// The character is still listed and can be opened.
+    /// </summary>
+    public string? DetailsError { get; init; }
 
     /// <summary>File contents as read; written back by the save writer (with a backup).</summary>
     public required byte[] RawData { get; init; }

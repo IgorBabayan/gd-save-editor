@@ -35,6 +35,14 @@ public sealed class GdcReader
 
     public int Position => _position;
 
+    /// <summary>Length of the whole file.</summary>
+    public int Length => _data.Length;
+
+    /// <summary>Position and key, to go back after a part that could not be read (see <see cref="Restore"/>).</summary>
+    public (int Position, uint Key) Snapshot() => (_position, _key);
+
+    public void Restore((int Position, uint Key) snapshot) => (_position, _key) = snapshot;
+
     public int ReadInt32() => unchecked((int)ReadUInt32());
 
     public uint ReadUInt32()
@@ -44,6 +52,44 @@ public sealed class GdcReader
         foreach (var b in raw)
             _key ^= _table[b];
         return value;
+    }
+
+    /// <summary>
+    /// An int32 that is decrypted with the current key but does not move the key on: the length and the end marker
+    /// of a block, and the zero after the header.
+    /// </summary>
+    public uint ReadUInt32KeyUnchanged() => BinaryPrimitives.ReadUInt32LittleEndian(Take(4)) ^ _key;
+
+    public float ReadSingle() => BitConverter.UInt32BitsToSingle(ReadUInt32());
+
+    /// <summary>Reads past <paramref name="count"/> bytes; the key moves on exactly as if they were read as values.</summary>
+    public void Skip(int count)
+    {
+        if (count < 0)
+            throw new InvalidDataException($"Invalid length {count} at offset {_position}.");
+        foreach (var b in Take(count))
+            _key ^= _table[b];
+    }
+
+    /// <summary>
+    /// Starts a block: <c>int32 id</c>, then its length (key unchanged). Returns the id and the offset the block ends at.
+    /// </summary>
+    public (uint Id, int End) ReadBlockStart()
+    {
+        var id = ReadUInt32();
+        var length = ReadUInt32KeyUnchanged();
+        if (length > (uint)(_data.Length - _position))
+            throw new InvalidDataException($"Block {id} at offset {_position} is longer than the file.");
+        return (id, _position + (int)length);
+    }
+
+    /// <summary>Ends a block: the position must be its end, followed by a zero int32 (key unchanged).</summary>
+    public void ReadBlockEnd(int end)
+    {
+        if (_position != end)
+            throw new InvalidDataException($"Block ends at offset {_position}, expected {end}.");
+        if (ReadUInt32KeyUnchanged() != 0)
+            throw new InvalidDataException($"Missing block end marker at offset {end}.");
     }
 
     public byte ReadByte()

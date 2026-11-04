@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using GD.SaveEditor.Services.GameData;
 using GD.SaveEditor.Services.GameData.Database;
+using GD.SaveEditor.Services.GameData.Textures;
 using GD.SaveEditor.Services.Notifications;
 
 namespace GD.SaveEditor.Presentation.ViewModels.Database;
@@ -11,7 +12,9 @@ namespace GD.SaveEditor.Presentation.ViewModels.Database;
 /// </summary>
 public sealed partial class DatabaseGeneratorViewModel(
     IDatabaseGenerator generator,
-    IGameTextProvider gameTextProvider) : ViewModelBase
+    IGameTextProvider gameTextProvider,
+    IGameItemProvider gameItemProvider,
+    IGameIconProvider gameIconProvider) : ViewModelBase
 {
     private readonly Dictionary<int, DatabaseGeneratorStepViewModel> _stepsById = [];
     private Task? _run;
@@ -61,8 +64,10 @@ public sealed partial class DatabaseGeneratorViewModel(
             Result = new DatabaseGenerationResult(DatabaseGenerationStatus.Failed, [message]);
         }
 
-        // New or changed texts (class names, ...) must be read from database.db again.
+        // New or changed texts (class names, ...), items and icons must be read from the new data again.
         gameTextProvider.ClearCache();
+        gameItemProvider.ClearCache();
+        gameIconProvider.ClearCache();
 
         (StatusText, StatusSeverity) = Result.Status switch
         {

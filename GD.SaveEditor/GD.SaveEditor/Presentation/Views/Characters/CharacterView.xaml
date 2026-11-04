@@ -4,6 +4,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:charactersVm="clr-namespace:GD.SaveEditor.Presentation.ViewModels.Characters"
+             xmlns:local="clr-namespace:GD.SaveEditor.Presentation.Views.Characters"
              xmlns:inventoryViews="clr-namespace:GD.SaveEditor.Presentation.Views.Inventory"
              xmlns:waypointsViews="clr-namespace:GD.SaveEditor.Presentation.Views.Waypoints"
              mc:Ignorable="d"
@@ -15,6 +16,10 @@
         (only its DataContext is replaced), so the open tab is kept when switching between characters.
     -->
     <TabControl x:Name="Tabs" Style="{StaticResource UnderlineTabControlStyle}">
+        <TabItem x:Name="CharacterTab" Header="Character">
+            <local:CharacterEquipmentView DataContext="{Binding Equipment}" />
+        </TabItem>
+
         <TabItem x:Name="InventoryTab" Header="Inventory">
             <inventoryViews:InventoryView DataContext="{Binding Inventory}" />
         </TabItem>

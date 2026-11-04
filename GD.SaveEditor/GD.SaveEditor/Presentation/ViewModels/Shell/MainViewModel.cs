@@ -19,7 +19,8 @@ public partial class MainViewModel(
     ICharacterSaveWriter characterSaveWriter,
     INotificationService notificationService,
     IToastService toastService,
-    NotificationCenterViewModel notificationCenter) : ViewModelBase
+    NotificationCenterViewModel notificationCenter,
+    CharacterViewModelFactory characterViewModelFactory) : ViewModelBase
 {
     private const int SoftcoreTabIndex = 0;
     private const int HardcoreTabIndex = 1;
@@ -80,7 +81,7 @@ public partial class MainViewModel(
     public CharacterSave? SelectedCharacter =>
         SelectedCharacterTabIndex == HardcoreTabIndex ? SelectedHardcoreCharacter : SelectedSoftcoreCharacter;
 
-    /// <summary>Details (Inventory / Waypoints tabs) of <see cref="SelectedCharacter"/>; <c>null</c> when nothing is selected.</summary>
+    /// <summary>Details (Character / Inventory / Waypoints tabs) of <see cref="SelectedCharacter"/>; <c>null</c> when nothing is selected.</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SaveCommand))]
     [NotifyCanExecuteChangedFor(nameof(ReloadCommand))]
@@ -185,7 +186,7 @@ public partial class MainViewModel(
         if (_openedCharacters.TryGetValue(character.FilePath, out var opened) && ReferenceEquals(opened.Character, character))
             return opened;
 
-        var details = new CharacterViewModel(character);
+        var details = characterViewModelFactory.Create(character);
         details.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName != nameof(CharacterViewModel.HasUnsavedChanges))
