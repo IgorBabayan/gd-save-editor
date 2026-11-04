@@ -1,5 +1,6 @@
 using System.Windows;
 using GD.SaveEditor.Extensions;
+using GD.SaveEditor.Presentation.Services;
 using GD.SaveEditor.Presentation.Views;
 using GD.SaveEditor.Services.Settings;
 using GD.SaveEditor.Services.Theming;
@@ -37,6 +38,23 @@ public partial class App : Application
         var mainWindow = _services.GetRequiredService<MainWindow>();
         MainWindow = mainWindow;
         mainWindow.Show();
+
+        // Auto-update runs in the background and reports through toasts:
+        // download progress, then a countdown before the editor restarts into the new version.
+        _ = RunAutoUpdateAsync(_services);
+    }
+
+    private static async Task RunAutoUpdateAsync(IServiceProvider services)
+    {
+        try
+        {
+            await services.GetRequiredService<IAutoUpdater>().RunOnStartupAsync();
+        }
+        catch (Exception ex)
+        {
+            // An update problem must never take the editor down.
+            System.Diagnostics.Debug.WriteLine($"Auto-update failed: {ex}");
+        }
     }
 
     protected override void OnExit(ExitEventArgs e)

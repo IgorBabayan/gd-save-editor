@@ -6,6 +6,7 @@
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         xmlns:settingsVm="clr-namespace:GD.SaveEditor.Presentation.ViewModels.Settings"
         xmlns:wpf="clr-namespace:Material.Icons.WPF;assembly=Material.Icons.WPF"
+        xmlns:behaviors="clr-namespace:GD.SaveEditor.Presentation.Behaviors"
         xmlns:toastViews="clr-namespace:GD.SaveEditor.Presentation.Views.Toasts"
         mc:Ignorable="d"
         d:DataContext="{d:DesignInstance Type=settingsVm:SettingsViewModel, IsDesignTimeCreatable=False}"
@@ -167,6 +168,80 @@
                            Foreground="{DynamicResource WarningForegroundBrush}"
                            Text="No Grim Dawn installation found here (database\database.arz is missing)."
                            Visibility="{Binding IsGameFolderInvalid, Converter={StaticResource BooleanToVisibilityConverter}}" />
+
+                <!-- Updates -->
+                <TextBlock Style="{StaticResource SectionHeaderTextStyle}" Margin="0,20,0,0" Text="Updates" />
+                <TextBlock Style="{StaticResource SecondaryTextStyle}"
+                           Margin="0,2,0,8"
+                           Text="{Binding CurrentVersionText}" />
+
+                <DockPanel LastChildFill="False">
+                    <CheckBox DockPanel.Dock="Left"
+                              VerticalAlignment="Center"
+                              Content="_Auto-update"
+                              IsChecked="{Binding AutoUpdate}"
+                              AutomationProperties.Name="Auto-update" />
+                    <Button DockPanel.Dock="Right"
+                            Margin="8,0,0,0"
+                            Style="{StaticResource AccentButtonStyle}"
+                            Content="_Download and update"
+                            ToolTip="Download the new version, then restart the editor to install it"
+                            Command="{Binding DownloadAndUpdateCommand}" />
+                    <Button DockPanel.Dock="Right"
+                            Style="{StaticResource DialogButtonStyle}"
+                            Content="Check for _updates"
+                            Command="{Binding CheckForUpdatesCommand}" />
+                </DockPanel>
+                <TextBlock Style="{StaticResource SecondaryTextStyle}"
+                           Margin="26,4,0,0"
+                           Text="On every start, check GitHub for a newer release. If one is found, it is downloaded and installed, and the editor restarts automatically." />
+                <TextBlock Margin="26,4,0,0"
+                           FontSize="12"
+                           Foreground="{DynamicResource AccentBrush}"
+                           Text="{Binding AvailableUpdateText}"
+                           Visibility="{Binding HasAvailableUpdate, Converter={StaticResource BooleanToVisibilityConverter}}" />
+
+                <!-- Countdown before the editor closes to install an update -->
+                <StackPanel Margin="0,14,0,0" Orientation="Horizontal">
+                    <TextBlock VerticalAlignment="Center"
+                               Text="Seconds before auto-restart"
+                               Foreground="{DynamicResource WindowForegroundBrush}" />
+                    <Button Margin="12,0,0,0"
+                            Style="{StaticResource IconButtonStyle}"
+                            ToolTip="Decrease"
+                            AutomationProperties.Name="Decrease seconds before auto-restart"
+                            Command="{Binding DecreaseRestartDelayCommand}">
+                        <wpf:MaterialIcon Kind="Minus" Width="16" Height="16" />
+                    </Button>
+                    <TextBox Width="64"
+                             Margin="4,0"
+                             HorizontalContentAlignment="Center"
+                             MaxLength="3"
+                             Text="{Binding RestartDelayText, UpdateSourceTrigger=PropertyChanged}"
+                             behaviors:NumericInput.IsEnabled="True"
+                             behaviors:NumericInput.Maximum="{Binding MaxRestartDelaySeconds}"
+                             AutomationProperties.Name="Seconds before auto-restart" />
+                    <Button Style="{StaticResource IconButtonStyle}"
+                            ToolTip="Increase"
+                            AutomationProperties.Name="Increase seconds before auto-restart"
+                            Command="{Binding IncreaseRestartDelayCommand}">
+                        <wpf:MaterialIcon Kind="Plus" Width="16" Height="16" />
+                    </Button>
+                </StackPanel>
+                <TextBlock Margin="0,6,0,0"
+                           FontSize="12"
+                           Foreground="{DynamicResource WarningForegroundBrush}"
+                           Visibility="{Binding IsRestartDelayInvalid, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <Run Text="Enter a number from 0 to" />
+                    <Run Text="{Binding MaxRestartDelaySeconds, Mode=OneWay}" /><Run Text="." />
+                </TextBlock>
+
+                <TextBlock Margin="0,6,0,0"
+                           FontSize="12"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource WarningForegroundBrush}"
+                           Text="This copy was not installed with the installer, so it will not be updated."
+                           Visibility="{Binding IsNotInstalled, Converter={StaticResource BooleanToVisibilityConverter}}" />
             </StackPanel>
 
             <!-- ===== Toasts (bottom-right, above the content) ===== -->

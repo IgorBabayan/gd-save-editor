@@ -14,6 +14,7 @@
   - **Generate / update database**: builds `database.db` from the game files (see below).
   - **Notification center**: history of what happened, kept between runs.
   - **Settings**: theme, saves folder (default `Documents\My Games\Grim Dawn\save\main`) and game folder.
+- **Automatic updates** for copies installed with the installer: on start the editor checks the latest GitHub release, downloads and verifies the new installer (progress shown as a toast, can be cancelled), counts down and restarts into the new version. Turn it off, change the countdown or update manually in **Settings → Updates** (*Check for updates* / *Download and update*). Unpacked or development builds are never updated.
 - Character list (a quarter of the window) split into **Softcore** and **Hardcore** tabs, each with a **Show only SSF characters** filter.
 - Character details with **Inventory** and **Waypoints** tabs (not implemented yet).
 - **Bags**: items can be dragged to another cell or bag, and added, changed or removed with the **item builder**:
