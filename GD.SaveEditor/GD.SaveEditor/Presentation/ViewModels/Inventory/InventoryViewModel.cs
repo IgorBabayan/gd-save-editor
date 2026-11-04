@@ -146,6 +146,9 @@ public sealed partial class InventoryViewModel : ViewModelBase
     [RelayCommand]
     private void ResetBags()
     {
+        // An open inspector would edit an item that is about to be put back.
+        _dialogs.CloseItemInspector();
+
         foreach (var (item, bag) in _removed)
             bag.Add(item);
         _removed.Clear();
@@ -188,23 +191,29 @@ public sealed partial class InventoryViewModel : ViewModelBase
 
     public bool HasStatusMessage => StatusMessage is not null;
 
-    /// <summary>"Add item" button: a new item at the first free cell of the main bag, then of the other bags.</summary>
+    /// <summary>
+    /// "Add item" button: the item inspector opens next to the button (the command parameter); the new item goes to the
+    /// first free cell of the main bag, then of the other bags.
+    /// </summary>
     [RelayCommand]
-    private void NewItem() => AddItem(MainBag, null);
+    private void NewItem(object? anchor) => AddItem(MainBag, null, anchor);
 
     /// <summary>
-    /// Opens the item builder for a new item and puts it on <paramref name="bag"/>: at <paramref name="cell"/> when it
-    /// fits there, otherwise at the first free cell of that bag, then of the other bags.
+    /// Opens the item inspector for a new item next to <paramref name="anchor"/>. Applied, the item goes on
+    /// <paramref name="bag"/>: at <paramref name="cell"/> when it fits there, otherwise at the first free cell of that
+    /// bag, then of the other bags.
     /// </summary>
-    public void AddItem(InventoryBagViewModel bag, (int X, int Y)? cell)
+    public void AddItem(InventoryBagViewModel bag, (int X, int Y)? cell, object? anchor = null)
     {
         if (!CanEditItems)
             return;
 
         StatusMessage = null;
-        if (_dialogs.ShowItemBuilder(null).Item is not { } built)
-            return;
+        _dialogs.ShowItemInspector(anchor, null, built => PlaceNewItem(built, bag, cell));
+    }
 
+    private void PlaceNewItem(BuiltItem built, InventoryBagViewModel bag, (int X, int Y)? cell)
+    {
         if (FindPlace(built.Columns, built.Rows, bag, cell, ignore: null) is not { } place)
         {
             StatusMessage = $"There is no free room of {built.Columns} x {built.Rows} cells in the bags for the new item. Make room and add it again.";
@@ -221,24 +230,28 @@ public sealed partial class InventoryViewModel : ViewModelBase
     }
 
     /// <summary>
-    /// Opens the item builder on <paramref name="item"/>. The changed item stays where it is when it still fits there
-    /// (it may be larger now), otherwise it moves to the first free cell of its bag, then of the other bags; removing it
-    /// in the builder takes it out of its bag.
+    /// Opens the item inspector on <paramref name="item"/>, next to <paramref name="anchor"/> (the item in the bag).
+    /// Applied, the changed item stays where it is when it still fits there (it may be larger now), otherwise it moves
+    /// to the first free cell of its bag, then of the other bags; removing it there takes it out of its bag.
     /// </summary>
-    public void EditItem(InventoryItemViewModel item)
+    public void EditItem(InventoryItemViewModel item, object? anchor = null)
     {
-        if (!CanEditItems || AllBags.FirstOrDefault(b => b.Items.Contains(item)) is not { } bag)
+        if (!CanEditItems || !AllBags.Any(b => b.Items.Contains(item)))
             return;
 
         StatusMessage = null;
-        var result = _dialogs.ShowItemBuilder(item.CurrentItem);
-        if (result.Removed)
-        {
-            Remove(item, bag);
-            return;
-        }
+        _dialogs.ShowItemInspector(anchor, item.CurrentItem,
+            built => ApplyEdit(item, built),
+            () =>
+            {
+                if (AllBags.FirstOrDefault(b => b.Items.Contains(item)) is { } bag)
+                    Remove(item, bag);
+            });
+    }
 
-        if (result.Item is not { } built)
+    private void ApplyEdit(InventoryItemViewModel item, BuiltItem built)
+    {
+        if (AllBags.FirstOrDefault(b => b.Items.Contains(item)) is not { } bag)
             return;
 
         if (FindPlace(built.Columns, built.Rows, bag, (item.X, item.Y), ignore: item) is not { } place)

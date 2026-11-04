@@ -9,10 +9,11 @@ namespace GD.SaveEditor.Presentation.Converters;
 /// <summary>
 /// The game's color of an <see cref="ItemRarity"/>. Without a parameter: a solid brush for frames and names.
 /// With <c>Glow</c>: a radial glow for the slot background, like the colored slots of the equipment screen.
+/// With <c>Tint</c>: a faint flat tint, for the header of the item inspector.
 /// </summary>
 public sealed class ItemRarityToBrushConverter : IValueConverter
 {
-    private static readonly Dictionary<ItemRarity, (Brush Solid, Brush Glow)> Brushes = new()
+    private static readonly Dictionary<ItemRarity, (Brush Solid, Brush Glow, Brush Tint)> Brushes = new()
     {
         [ItemRarity.Unknown] = Create(Color.FromRgb(0x8A, 0x8A, 0x8A)),
         [ItemRarity.Common] = Create(Color.FromRgb(0xD8, 0xD8, 0xD8)),
@@ -28,13 +29,18 @@ public sealed class ItemRarityToBrushConverter : IValueConverter
     public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
         var brushes = Brushes[value is ItemRarity rarity && Brushes.ContainsKey(rarity) ? rarity : ItemRarity.Unknown];
-        return string.Equals(parameter as string, "Glow", StringComparison.OrdinalIgnoreCase) ? brushes.Glow : brushes.Solid;
+        return (parameter as string)?.ToLowerInvariant() switch
+        {
+            "glow" => brushes.Glow,
+            "tint" => brushes.Tint,
+            _ => brushes.Solid
+        };
     }
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
         DependencyProperty.UnsetValue;
 
-    private static (Brush Solid, Brush Glow) Create(Color color)
+    private static (Brush Solid, Brush Glow, Brush Tint) Create(Color color)
     {
         var solid = new SolidColorBrush(color);
         solid.Freeze();
@@ -53,6 +59,9 @@ public sealed class ItemRarityToBrushConverter : IValueConverter
             }
         };
         glow.Freeze();
-        return (solid, glow);
+
+        var tint = new SolidColorBrush(Color.FromArgb(0x22, color.R, color.G, color.B));
+        tint.Freeze();
+        return (solid, glow, tint);
     }
 }

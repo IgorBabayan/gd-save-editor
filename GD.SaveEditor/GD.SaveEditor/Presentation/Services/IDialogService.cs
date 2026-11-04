@@ -30,4 +30,15 @@ public interface IDialogService
     /// Shows the modal item builder for a new bag item (<paramref name="current"/> <c>null</c>) or to change one.
     /// </summary>
     ItemBuilderResult ShowItemBuilder(SaveItem? current);
+
+    /// <summary>
+    /// Shows the compact item builder (the inspector) next to <paramref name="anchor"/> (a view element) for a new bag
+    /// item (<paramref name="current"/> <c>null</c>) or to change one, and returns at once: <paramref name="applied"/>
+    /// is called with the built item when the user applies it, <paramref name="removed"/> when the user removes the
+    /// item. Its expand button opens the full builder window. Without an anchor the full window opens (modal).
+    /// </summary>
+    void ShowItemInspector(object? anchor, SaveItem? current, Action<BuiltItem> applied, Action? removed = null);
+
+    /// <summary>Closes the item inspector without applying it, if one is open.</summary>
+    void CloseItemInspector();
 }

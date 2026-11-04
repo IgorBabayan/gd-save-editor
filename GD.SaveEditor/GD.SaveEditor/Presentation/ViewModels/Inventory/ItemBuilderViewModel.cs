@@ -122,12 +122,19 @@ public sealed partial class ItemBuilderViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(EmptyListText))]
     private bool _isLoading;
 
+    /// <summary>The catalog was (or is being) read: the inspector and the full window share one view model.</summary>
+    private bool _loadStarted;
+
     /// <summary>
-    /// Reads the catalog on a worker thread, then selects the edited item and puts its parts back. Call once, after the
-    /// window is shown.
+    /// Reads the catalog on a worker thread, then selects the edited item and puts its parts back. Only the first call
+    /// does anything (the inspector and the full builder window both call it when they show).
     /// </summary>
     public async Task LoadAsync()
     {
+        if (_loadStarted)
+            return;
+        _loadStarted = true;
+
         if (!IsDatabaseAvailable)
         {
             OnPropertyChanged(nameof(EmptyListText));
@@ -184,7 +191,7 @@ public sealed partial class ItemBuilderViewModel : ViewModelBase
 
     /// <summary>Shown when the edited item is not in the item list (or the database could not be read).</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasUnknownBaseText))]
+    [NotifyPropertyChangedFor(nameof(HasUnknownBaseText), nameof(HeaderName))]
     private string? _unknownBaseText;
 
     public bool HasUnknownBaseText => UnknownBaseText is not null;
@@ -231,6 +238,7 @@ public sealed partial class ItemBuilderViewModel : ViewModelBase
 
         Select(ref _selectedCategory, option);
         OnPropertyChanged(nameof(HasRarityFilter));
+        OnPropertyChanged(nameof(SelectedCategoryName));
         ApplyFilter();
     }
 
@@ -241,6 +249,7 @@ public sealed partial class ItemBuilderViewModel : ViewModelBase
             return;
 
         Select(ref _selectedRarity, option);
+        OnPropertyChanged(nameof(SelectedRarity));
         ApplyFilter();
     }
 
@@ -257,6 +266,7 @@ public sealed partial class ItemBuilderViewModel : ViewModelBase
         if (Categories.FirstOrDefault(c => c.Value is ItemCategory category && category == item.Category) is { } option)
             Select(ref _selectedCategory, option);
         OnPropertyChanged(nameof(HasRarityFilter));
+        OnPropertyChanged(nameof(SelectedCategoryName));
     }
 
     /// <summary>Items matching the pills and <see cref="SearchText"/>, grouped by type (at most <see cref="MaxListedItems"/>).</summary>
@@ -323,6 +333,7 @@ public sealed partial class ItemBuilderViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelection), nameof(IsStackable), nameof(SizeError), nameof(HasSizeError), nameof(QuantityError), nameof(HasQuantityError))]
+    [NotifyPropertyChangedFor(nameof(HeaderName), nameof(HeaderType), nameof(HeaderIcon), nameof(HeaderRarity), nameof(SelectedItemText))]
     [NotifyCanExecuteChangedFor(nameof(ApplyCommand))]
     private ItemOptionViewModel? _selectedOption;
 
@@ -335,6 +346,7 @@ public sealed partial class ItemBuilderViewModel : ViewModelBase
     {
         if (value is not null)
             UnknownBaseText = null;
+        OnPropertyChanged(nameof(HeaderName));
 
         _rolledBonuses = value is null ? [] : _catalog.GetCompletionBonuses(value.Item.RecordPath);
         // Another item drops the parts it cannot take; the edited item keeps all of its own.
@@ -371,6 +383,7 @@ public sealed partial class ItemBuilderViewModel : ViewModelBase
 
         OnPropertyChanged(nameof(HasParts));
         OnPropertyChanged(nameof(PartsHint));
+        OnPropertyChanged(nameof(PartSummary));
     }
 
     /// <summary>Parts the new selection cannot take are dropped (after the list changed the item kind).</summary>
@@ -486,6 +499,7 @@ public sealed partial class ItemBuilderViewModel : ViewModelBase
             UpdatePartAvailability();
         }
 
+        OnPropertyChanged(nameof(PartSummary));
         RefreshPreview();
     }
 
@@ -645,8 +659,35 @@ public sealed partial class ItemBuilderViewModel : ViewModelBase
 
     /// <summary>The game's tooltip of the item as built; <c>null</c> while nothing is selected.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasPreview))]
+    [NotifyPropertyChangedFor(nameof(HasPreview), nameof(HeaderName), nameof(HeaderType), nameof(HeaderIcon), nameof(HeaderRarity))]
     private EquipmentSlotViewModel? _preview;
+
+    // ===== Header of the inspector: the item as built (the preview), the selection until the preview is ready =====
+
+    /// <summary>"Mythical Ring of Steel of the Bear", or a prompt while nothing is selected.</summary>
+    public string HeaderName => SelectedOption is null
+        ? UnknownBaseText is null ? "Select an item" : "Unknown item"
+        : Preview?.Name ?? SelectedOption.Name;
+
+    /// <summary>"Double Rare Ring", "Component", ...</summary>
+    public string HeaderType => SelectedOption is null ? "New item" : Preview?.TypeText ?? SelectedOption.Details;
+
+    public System.Windows.Media.ImageSource? HeaderIcon => Preview?.Icon ?? SelectedOption?.Icon;
+
+    /// <summary>The name color: affixes raise a common or magical base, like in the game.</summary>
+    public ItemRarity HeaderRarity => Preview?.Rarity ?? SelectedOption?.Rarity ?? ItemRarity.Unknown;
+
+    /// <summary>Value of the inspector's "Item" row.</summary>
+    public string SelectedItemText => SelectedOption?.Name ?? "Choose an item";
+
+    /// <summary>Value of the inspector's "Category" row.</summary>
+    public string SelectedCategoryName => _selectedCategory.Name;
+
+    /// <summary>Value of the inspector's "Rarity" row.</summary>
+    public FilterOptionViewModel SelectedRarity => _selectedRarity;
+
+    /// <summary>Filled part slots out of the available ones, e.g. "2 / 5" (value of the inspector's "Parts" row).</summary>
+    public string PartSummary => $"{PartSlots.Count(s => s.IsAvailable && s.HasPart)} / {PartSlots.Count(s => s.IsAvailable)}";
 
     public bool HasPreview => Preview is not null;
 

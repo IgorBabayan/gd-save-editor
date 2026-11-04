@@ -100,8 +100,8 @@
             <!--
                 A bag: the cell grid with its items placed on it by cell. Items are dragged by the mouse; while one is
                 over the bag, the cells it would cover are shown green (it fits) or red (outside the bag or over
-                another item). A right-click offers to add an item at the cell, or to change or remove the item under
-                the mouse; a double-click on an item opens it in the item builder.
+                another item). A click on an item opens the item inspector next to it; a right-click offers to add an
+                item at the cell, or to change or remove the item under the mouse.
             -->
             <DataTemplate x:Key="BagGridTemplate" DataType="{x:Type inventoryVm:InventoryBagViewModel}">
                 <Border HorizontalAlignment="Left"
@@ -139,8 +139,7 @@
                                                     ContentTemplate="{StaticResource BagItemTemplate}"
                                                     PreviewMouseLeftButtonDown="OnItemMouseDown"
                                                     PreviewMouseLeftButtonUp="OnItemMouseUp"
-                                                    PreviewMouseMove="OnItemMouseMove"
-                                                    MouseDoubleClick="OnItemDoubleClick" />
+                                                    PreviewMouseMove="OnItemMouseMove" />
                                     <DataTemplate.Triggers>
                                         <DataTrigger Binding="{Binding IsSizeKnown}" Value="True">
                                             <Setter TargetName="ItemHost" Property="Cursor" Value="Hand" />
@@ -331,6 +330,7 @@
                                     ToolTip="Add an item (right-click a cell to put it there)"
                                     AutomationProperties.Name="Add item"
                                     Command="{Binding NewItemCommand}"
+                                    CommandParameter="{Binding RelativeSource={RelativeSource Self}}"
                                     Visibility="{Binding CanEditItems, Converter={StaticResource BooleanToVisibilityConverter}}">
                                 <wpf:MaterialIcon Kind="PlusBoxOutline" Width="18" Height="18" Foreground="{StaticResource BagGoldBrush}" />
                             </Button>
