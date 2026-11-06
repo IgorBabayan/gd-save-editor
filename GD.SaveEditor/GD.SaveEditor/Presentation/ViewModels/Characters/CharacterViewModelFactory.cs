@@ -1,6 +1,7 @@
 using GD.SaveEditor.Presentation.Services;
 using GD.SaveEditor.Services.GameData.Database;
 using GD.SaveEditor.Services.GameData.Textures;
+using GD.SaveEditor.Services.GameData.Waypoints;
 using GD.SaveEditor.Services.Saves;
 using GD.SaveEditor.Services.Saves.Models;
 
@@ -11,7 +12,8 @@ public sealed class CharacterViewModelFactory(
     IGameItemProvider items,
     IGameIconProvider icons,
     ICharacterSaveEditor saveEditor,
-    IDialogService dialogs)
+    IDialogService dialogs,
+    IGameWaypointProvider waypoints)
 {
-    public CharacterViewModel Create(CharacterSave character) => new(character, items, icons, saveEditor, dialogs);
+    public CharacterViewModel Create(CharacterSave character) => new(character, items, icons, saveEditor, dialogs, waypoints);
 }

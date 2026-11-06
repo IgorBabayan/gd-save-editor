@@ -37,14 +37,20 @@ public sealed record EquipmentChange(EquipmentSlot Slot, int WeaponSet, SaveItem
 /// </param>
 /// <param name="Equipment">Equipment slots that get another item or are emptied; the other slots stay as they are.</param>
 /// <param name="Profile">Name, sex, unlocked difficulty, Crucible tributes, unspent points and attributes.</param>
+/// <param name="Waypoints">
+/// The unlocked waypoints of Normal, Elite and Ultimate as they should be stored: they replace the three lists of the
+/// file (see <see cref="CharacterWaypoints"/>).
+/// </param>
 public sealed record CharacterChanges(
     uint? Money = null,
     IReadOnlyList<IReadOnlyList<PlacedItem>>? Bags = null,
     IReadOnlyList<EquipmentChange>? Equipment = null,
-    ProfileChanges? Profile = null)
+    ProfileChanges? Profile = null,
+    CharacterWaypoints? Waypoints = null)
 {
     public bool IsEmpty =>
-        Money is null && Bags is null && Equipment is not { Count: > 0 } && Profile is null or { IsEmpty: true };
+        Money is null && Bags is null && Equipment is not { Count: > 0 } && Profile is null or { IsEmpty: true }
+        && Waypoints is null;
 }
 
 public interface ICharacterSaveEditor

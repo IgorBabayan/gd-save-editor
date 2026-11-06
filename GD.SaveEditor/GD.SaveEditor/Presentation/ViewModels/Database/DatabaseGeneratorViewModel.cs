@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using GD.SaveEditor.Services.GameData;
 using GD.SaveEditor.Services.GameData.Database;
 using GD.SaveEditor.Services.GameData.Textures;
+using GD.SaveEditor.Services.GameData.Waypoints;
 using GD.SaveEditor.Services.Notifications;
 
 namespace GD.SaveEditor.Presentation.ViewModels.Database;
@@ -15,7 +16,8 @@ public sealed partial class DatabaseGeneratorViewModel(
     IDatabaseGenerator generator,
     IGameTextProvider gameTextProvider,
     IGameItemProvider gameItemProvider,
-    IGameIconProvider gameIconProvider) : ViewModelBase
+    IGameIconProvider gameIconProvider,
+    IGameWaypointProvider gameWaypointProvider) : ViewModelBase
 {
     private Task? _run;
 
@@ -72,6 +74,7 @@ public sealed partial class DatabaseGeneratorViewModel(
         gameTextProvider.ClearCache();
         gameItemProvider.ClearCache();
         gameIconProvider.ClearCache();
+        gameWaypointProvider.ClearCache();
 
         (StatusText, StatusSeverity) = Result.Status switch
         {

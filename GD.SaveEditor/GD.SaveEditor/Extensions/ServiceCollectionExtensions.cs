@@ -12,6 +12,7 @@ using GD.SaveEditor.Services.GameData;
 using GD.SaveEditor.Services.GameData.Database;
 using GD.SaveEditor.Services.GameData.Items;
 using GD.SaveEditor.Services.GameData.Textures;
+using GD.SaveEditor.Services.GameData.Waypoints;
 using GD.SaveEditor.Services.Notifications;
 using GD.SaveEditor.Services.Saves;
 using GD.SaveEditor.Services.Settings;
@@ -49,6 +50,7 @@ static class ServiceCollectionExtensions
             services.AddSingleton<IGameTextProvider, GameTextProvider>();
             services.AddSingleton<IGameItemProvider, GameItemProvider>();
             services.AddSingleton<IGameIconProvider, GameIconProvider>();
+            services.AddSingleton<IGameWaypointProvider, GameWaypointProvider>();
             services.AddSingleton<IItemCatalog, ItemCatalog>();
 
             return services;

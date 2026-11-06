@@ -43,6 +43,9 @@ public sealed record CharacterSave
     /// <summary>Items in the bags; <c>null</c> when that part of the file could not be read (see <see cref="DetailsError"/>).</summary>
     public CharacterInventory? Inventory { get; init; }
 
+    /// <summary>Unlocked waypoints per difficulty; <c>null</c> when that part of the file could not be read.</summary>
+    public CharacterWaypoints? Waypoints { get; init; }
+
     /// <summary>Iron bits the character carries; <c>null</c> when that part of the file could not be read.</summary>
     public uint? Money { get; init; }
 

@@ -3,6 +3,7 @@ using GD.SaveEditor.Presentation.ViewModels.Inventory;
 using GD.SaveEditor.Presentation.ViewModels.Waypoints;
 using GD.SaveEditor.Services.GameData.Database;
 using GD.SaveEditor.Services.GameData.Textures;
+using GD.SaveEditor.Services.GameData.Waypoints;
 using GD.SaveEditor.Services.Saves;
 using GD.SaveEditor.Services.Saves.Models;
 
@@ -21,14 +22,15 @@ public sealed partial class CharacterViewModel : ViewModelBase
         IGameItemProvider items,
         IGameIconProvider icons,
         ICharacterSaveEditor saveEditor,
-        IDialogService dialogs)
+        IDialogService dialogs,
+        IGameWaypointProvider waypoints)
     {
         _saveEditor = saveEditor;
         Character = character;
         Profile = new CharacterProfileViewModel(character);
         Equipment = new CharacterEquipmentViewModel(character, Profile, items, icons, dialogs);
         Inventory = new InventoryViewModel(character, items, icons, dialogs);
-        Waypoints = new WaypointsViewModel(character);
+        Waypoints = new WaypointsViewModel(character, waypoints);
 
         Inventory.PropertyChanged += (_, e) =>
         {
@@ -43,6 +45,11 @@ public sealed partial class CharacterViewModel : ViewModelBase
         Profile.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(CharacterProfileViewModel.HasChanges))
+                RefreshHasUnsavedChanges();
+        };
+        Waypoints.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(WaypointsViewModel.HasChanges))
                 RefreshHasUnsavedChanges();
         };
 
@@ -69,14 +76,14 @@ public sealed partial class CharacterViewModel : ViewModelBase
 
     /// <summary>
     /// The bytes to write into <c>player.gdc</c>: the file as read with the changes made in the tabs (the character
-    /// panel, the iron bits, the items moved, added, changed or removed in the bags, and the items equipped, changed or
-    /// taken off).
+    /// panel, the iron bits, the items moved, added, changed or removed in the bags, the items equipped, changed or
+    /// taken off, and the waypoints unlocked or locked).
     /// </summary>
     /// <exception cref="System.IO.InvalidDataException">The changes cannot be written into this file.</exception>
     public byte[] GetSaveData() =>
         _saveEditor.Apply(Character, new CharacterChanges(
             Money: Inventory.ChangedMoney, Bags: Inventory.ChangedBags, Equipment: Equipment.ChangedEquipment,
-            Profile: Profile.Changes));
+            Profile: Profile.Changes, Waypoints: Waypoints.Changes));
 
     /// <summary>Call when a tab changed something, so the Save button follows the actual difference to the file.</summary>
     public void RefreshHasUnsavedChanges() =>

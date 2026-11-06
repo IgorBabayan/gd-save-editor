@@ -8,7 +8,8 @@ namespace GD.SaveEditor.Services.Saves;
 /// so one changed value changes the encrypted bytes of everything after it: the file is read value by value
 /// (<see cref="CharacterFile"/>), the values are changed (the iron bits; the sex, unlocked difficulty, Crucible tributes,
 /// unspent points and attributes) or rebuilt (the name; the bag blocks, when items were moved, added, changed or removed;
-/// the equipment slots, when items were equipped, changed or taken off) and the whole file is encrypted again (<see cref="GdcWriter"/>). The result is read back before it is returned: it
+/// the equipment slots, when items were equipped, changed or taken off; the waypoint lists, when waypoints were unlocked
+/// or locked) and the whole file is encrypted again (<see cref="GdcWriter"/>). The result is read back before it is returned: it
 /// must hold exactly the values that were meant to be written.
 /// </summary>
 public sealed class CharacterSaveEditor : ICharacterSaveEditor
@@ -32,6 +33,14 @@ public sealed class CharacterSaveEditor : ICharacterSaveEditor
         // number of values, and it is replaced last.
         if (changes.Profile is { IsEmpty: false } profile)
             SetProfileValues(tokens, original, profile);
+
+        // The waypoint block comes after the inventory: rebuilt before the bags and the equipment, it does not move them.
+        if (changes.Waypoints is { } waypoints)
+        {
+            if (original.WaypointLayout is not { } waypointLayout)
+                throw new InvalidDataException("The waypoints could not be found in the save file.");
+            ReplaceWaypoints(tokens, waypointLayout, waypoints);
+        }
 
         // The equipment is stored after the bags, so it is replaced first: the bags' indices stay valid. The inventory
         // block that holds both grows or shrinks by what they changed.
@@ -185,6 +194,42 @@ public sealed class CharacterSaveEditor : ICharacterSaveEditor
     {
         var index = offset is { } value ? tokens.FindIndex(t => t.Offset == value) : -1;
         return index >= 0 ? index : throw new InvalidDataException($"{what} could not be found in the save file.");
+    }
+
+    /// <summary>
+    /// Replaces the three waypoint lists of block 6 (<c>int32 count, count x 16-byte id</c> each) with
+    /// <paramref name="waypoints"/> and computes the block's length again.
+    /// </summary>
+    private static void ReplaceWaypoints(List<GdcToken> tokens, WaypointTokenLayout layout, CharacterWaypoints waypoints)
+    {
+        if (waypoints.ByDifficulty.Count != CharacterWaypoints.DifficultyCount || layout.Lists.Count != CharacterWaypoints.DifficultyCount)
+            throw new InvalidDataException($"The waypoints must have {CharacterWaypoints.DifficultyCount} lists (Normal, Elite, Ultimate).");
+
+        var segment = new List<GdcToken>();
+        for (var list = 0; list < CharacterWaypoints.DifficultyCount; list++)
+        {
+            var uids = waypoints.ByDifficulty[list];
+            if (uids.Distinct(StringComparer.OrdinalIgnoreCase).Count() != uids.Count)
+                throw new InvalidDataException("A waypoint is listed twice.");
+
+            segment.Add(tokens[layout.Lists[list].CountToken] with { Value = (uint)uids.Count });
+            foreach (var uid in uids)
+            {
+                if (!CharacterWaypoints.IsValidUid(uid))
+                    throw new InvalidDataException($"\"{uid}\" is not a waypoint id.");
+                foreach (var b in Convert.FromHexString(uid))
+                    segment.Add(new GdcToken(0, GdcTokenKind.Byte, b));
+            }
+        }
+
+        // The lists are stored one after another, from the first count to the end of the last list.
+        var first = layout.Lists[0].CountToken;
+        var count = layout.Lists[^1].End - first;
+        tokens.RemoveRange(first, count);
+        tokens.InsertRange(first, segment);
+
+        var endToken = layout.EndToken + segment.Count - count;
+        tokens[layout.LengthToken] = tokens[layout.LengthToken] with { Value = SizeOf(tokens, layout.LengthToken + 1, endToken) };
     }
 
     /// <summary>

@@ -13,7 +13,8 @@ namespace GD.SaveEditor.Services.Saves;
 /// <c>int32 id, int32 length (key unchanged), body, int32 0 (key unchanged)</c>.
 /// <para>
 /// Block 1 holds the iron bits, block 2 ("bio") level, experience, unspent points and attributes, block 3 the bags
-/// and the equipment. The blocks after them (stash, waypoints, skills, factions, UI, statistics, ...) are read value by
+/// and the equipment, block 6 the unlocked waypoints. The other blocks after them (stash, skills, factions, UI,
+/// statistics, ...) are read value by
 /// value as well, only so the file can be encrypted again after a change (see <see cref="GdcWriter"/>): every value
 /// has to be read with its exact size.
 /// </para>
@@ -67,6 +68,9 @@ public sealed class CharacterFile
     public CharacterStats? Stats { get; private set; }
     public CharacterEquipment? Equipment { get; private set; }
     public CharacterInventory? Inventory { get; private set; }
+
+    /// <summary>Unlocked waypoints (block 6) per difficulty; <c>null</c> when the block could not be read.</summary>
+    public CharacterWaypoints? Waypoints { get; private set; }
 
     /// <summary>Iron bits; <c>null</c> when block 1 could not be read.</summary>
     public uint? Money { get; private set; }
@@ -128,6 +132,16 @@ public sealed class CharacterFile
     /// </summary>
     public EquipmentTokenLayout? EquipmentLayout { get; private set; }
 
+    /// <summary>
+    /// Where the waypoint lists (block 6) are in <see cref="Tokens"/>, to write other lists; <c>null</c> unless read with
+    /// <c>recordTokens</c>.
+    /// </summary>
+    public WaypointTokenLayout? WaypointLayout { get; private set; }
+
+    private int _teleportLengthToken = -1;
+    private int _teleportEndToken = -1;
+    private List<UidListTokenLayout>? _teleportLists;
+
     private int _inventoryLengthToken = -1;
     private int _inventoryEndToken = -1;
     private List<BagTokenLayout>? _bagLayouts;
@@ -181,6 +195,9 @@ public sealed class CharacterFile
         if (recordTokens && file.RewriteError is null && file._slotLayouts is { Count: > 0 } slots
             && file._inventoryLengthToken >= 0 && file._inventoryEndToken >= 0)
             file.EquipmentLayout = new EquipmentTokenLayout(file._inventoryLengthToken, file._inventoryEndToken, slots);
+        if (recordTokens && file.RewriteError is null && file._teleportLists is { Count: > 0 } lists
+            && file._teleportLengthToken >= 0 && file._teleportEndToken >= 0)
+            file.WaypointLayout = new WaypointTokenLayout(file._teleportLengthToken, file._teleportEndToken, lists);
         return file;
     }
 
@@ -208,6 +225,8 @@ public sealed class CharacterFile
             else
             {
                 ReadBlockAfterInventory(reader, id, end);
+                if (id == TeleportBlockId && _teleportLists is not null)
+                    (_teleportLengthToken, _teleportEndToken) = (blockToken + 1, reader.TokenCount);
             }
 
             reader.ReadBlockEnd(end);
@@ -254,7 +273,10 @@ public sealed class CharacterFile
                 for (var i = 0; i < 3; i++)
                     reader.Skip(16);
                 break;
-            case TeleportBlockId or MarkerBlockId when version == 1:
+            case TeleportBlockId when version == 1:
+                ReadWaypoints(reader);
+                break;
+            case MarkerBlockId when version == 1:
                 ReadUidLists(reader, 3);
                 break;
             case ShrineBlockId when version == 2:
@@ -640,6 +662,35 @@ public sealed class CharacterFile
         }
     }
 
+    /// <summary>
+    /// Waypoints (block 6, version 1): for Normal, Elite and Ultimate <c>int32 count, count x 16-byte id</c> of the
+    /// rift gates unlocked in that difficulty (see <c>GameWaypoint.Uid</c>).
+    /// </summary>
+    private void ReadWaypoints(GdcReader reader)
+    {
+        var lists = new List<IReadOnlyList<string>>(CharacterWaypoints.DifficultyCount);
+        var layouts = new List<UidListTokenLayout>(CharacterWaypoints.DifficultyCount);
+        Span<byte> uid = stackalloc byte[16];
+        for (var list = 0; list < CharacterWaypoints.DifficultyCount; list++)
+        {
+            var countToken = reader.TokenCount;
+            var count = ReadCount(reader);
+            var uids = new List<string>(count);
+            for (var i = 0; i < count; i++)
+            {
+                for (var b = 0; b < uid.Length; b++)
+                    uid[b] = reader.ReadByte();
+                uids.Add(Convert.ToHexStringLower(uid));
+            }
+
+            lists.Add(uids);
+            layouts.Add(new UidListTokenLayout(countToken, reader.TokenCount));
+        }
+
+        Waypoints = new CharacterWaypoints(lists);
+        _teleportLists = layouts;
+    }
+
     /// <summary><paramref name="lists"/> x (int32 count, count x 16-byte id): respawn points, waypoints, markers, shrines.</summary>
     private static void ReadUidLists(GdcReader reader, int lists)
     {
@@ -838,6 +889,15 @@ public sealed record InventoryTokenLayout(int LengthToken, int EndToken, IReadOn
 /// in an empty slot), then the "attached" flag at <c>AttachedToken</c>.
 /// </summary>
 public sealed record SlotTokenLayout(EquipmentSlot Slot, int WeaponSet, int Start, int End, int AttachedToken);
+
+/// <summary>Values of one list of 16-byte ids: the count at <c>CountToken</c>, the ids' bytes up to <c>End</c> (exclusive).</summary>
+public sealed record UidListTokenLayout(int CountToken, int End);
+
+/// <summary>
+/// Values of the waypoint block (6): its length, its end marker and its three lists (Normal, Elite, Ultimate), stored
+/// one after another.
+/// </summary>
+public sealed record WaypointTokenLayout(int LengthToken, int EndToken, IReadOnlyList<UidListTokenLayout> Lists);
 
 /// <summary>
 /// Values of the equipment: the inventory block's length and end marker (the equipment is stored at its end) and the

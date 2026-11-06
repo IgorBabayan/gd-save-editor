@@ -25,6 +25,15 @@ public sealed record GameTagRow(string Tag, string Text, string Source);
 /// <summary>A row of <c>resources</c>: a file inside a resource archive (e.g. an item icon in <c>Items.arc</c>).</summary>
 public sealed record GameResourceRow(string Archive, string Path, long Size, long Hash);
 
+/// <summary>A row of <c>waypoints</c>: a rift gate of the world map (see <c>WorldRiftGateReader</c>).</summary>
+/// <param name="Uid">The gate's 16-byte id as lowercase hex, as the save file stores it.</param>
+/// <param name="Record">Record of the gate.</param>
+/// <param name="NameTag">Text tag (or text) of the gate's name, from its record; <c>null</c> when it has none.</param>
+/// <param name="Campaign">First campaign whose world map has the gate (<c>GameWaypointCampaign</c>).</param>
+/// <param name="Ordinal">Position of the gate in that world map.</param>
+/// <param name="Source">The <c>Levels.arc</c> it was read from (relative path).</param>
+public sealed record GameWaypointRow(string Uid, string Record, string? NameTag, int Campaign, int Ordinal, string Source);
+
 /// <summary>A row of <c>source_files</c>: a game file the database was built from.</summary>
 /// <param name="Path">Relative path in the game folder, e.g. <c>database/database.arz</c>.</param>
 public sealed record GameSourceRow(string Path, string Origin, long Size, DateTime LastWriteUtc, string Sha256);
@@ -38,6 +47,15 @@ public sealed class GameDataSnapshot
 
     /// <summary>Resources by <c>archive|path</c>.</summary>
     public Dictionary<string, GameResourceRow> Resources { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Waypoints by uid; only stored when <see cref="WaypointsRead"/>.</summary>
+    public Dictionary<string, GameWaypointRow> Waypoints { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// At least one <c>Levels.arc</c> was read in this run, so <see cref="Waypoints"/> replaces the waypoints of the
+    /// database; otherwise (no game folder) the database keeps the ones it has.
+    /// </summary>
+    public bool WaypointsRead { get; set; }
 
     public List<GameSourceRow> Sources { get; } = [];
 
@@ -66,7 +84,8 @@ public sealed record GameMigrationResult(
     string? ScriptPath,
     TableChanges Records,
     TableChanges Tags,
-    TableChanges Resources)
+    TableChanges Resources,
+    TableChanges Waypoints)
 {
     public bool WasApplied => Name is not null;
 }

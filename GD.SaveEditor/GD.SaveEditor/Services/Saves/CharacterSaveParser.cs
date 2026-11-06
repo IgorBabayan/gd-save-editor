@@ -32,6 +32,7 @@ public sealed class CharacterSaveParser(IGameTextProvider gameTexts) : ICharacte
             Equipment = file.Equipment,
             Inventory = file.Inventory,
             Money = file.Money,
+            Waypoints = file.Waypoints,
             UnlockedDifficulty = file.GreatestDifficulty is { } difficulty && Enum.IsDefined((GameDifficulty)difficulty)
                 ? (GameDifficulty)difficulty
                 : null,

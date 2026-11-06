@@ -16,7 +16,7 @@
   - **Settings**: theme, saves folder (default `Documents\My Games\Grim Dawn\save\main`) and game folder.
 - **Automatic updates** for copies installed with the installer: on start the editor checks the latest GitHub release, downloads and verifies the new installer (progress shown as a toast, can be cancelled), counts down and restarts into the new version. Turn it off, change the countdown or update manually in **Settings → Updates** (*Check for updates* / *Download and update*). Unpacked or development builds are never updated.
 - Character list (a quarter of the window) split into **Softcore** and **Hardcore** tabs, each with a **Show only SSF characters** filter.
-- Character details with **Inventory** and **Waypoints** tabs (not implemented yet).
+- Character details with **Inventory** and **Waypoints** tabs.
 - **Character panel** (beside the equipment): name, sex, unlocked difficulty (Normal / Elite / Ultimate), Crucible
   tributes, physique, cunning, spirit, and unspent attribute, skill and devotion points (at most 55). Changed values are
   highlighted and written on **Save**; base health and energy follow physique and spirit like in the game; Esc or the
@@ -29,6 +29,10 @@
   with the game's tooltip, and the parts an item can take: prefix, suffix, crafting bonus, component and augment for
   gear, completion bonus (the ones the relic rolls are listed first) and crafting bonus for relics. The seed the game
   rolls the values from can be typed or rerolled; components, augments and consumables take a stack size.
+- **Waypoints** (needs the game database built with the game folder set): the rift gates of every campaign — base
+  campaign (Acts 1–3, 30), Ashes of Malmouth (10), Forgotten Gods (13) and Fangs of Asterkarn (19) — for Normal, Elite
+  and Ultimate. Tick single waypoints, **Unlock all** of a campaign, unlock everything in the selected difficulty or in
+  every difficulty; changes are highlighted and written on **Save**, the undo button puts the save file's lists back.
 
 ## Game database
 
@@ -42,8 +46,11 @@ The database button asks for confirmation, then gets these files:
 | `gdx3/database/GDX3.arz` | Fangs of Asterkarn |
 | `resources/Text_EN.arc` | English item names and descriptions |
 | `resources/Items.arc` | Item icons and other item resources |
+| `resources/Levels.arc`, `gdx1/…`, `gdx2/…`, `gdx3/resources/Levels.arc` | World maps: the waypoints (rift gates) of each campaign |
 
 Each file is first requested from `https://www.grimtools.com/db/<path>`. When the response is not a valid game file, the file is read from the Grim Dawn installation folder (Settings, or found through Steam / GOG). Expansions you do not own are skipped with a warning.
+
+The `Levels.arc` archives are only read from the Grim Dawn installation folder (they are far too large to download). The editor reads the `"- World Riftgates"` table of `world001.map` in each of them; a waypoint belongs to the first campaign whose archive has it.
 
 The item records, the texts and the `Items.arc` file list are compared with `%APPDATA%\GD.SaveEditor\database.db`. Only what the database does not hold yet (new rows, changed rows, rows that are gone) is written as a migration to `%APPDATA%\GD.SaveEditor\Migrations\<timestamp>_game_data.sql` and applied in one transaction; applied migrations are listed in the `__migrations` table. When the game files did not change, no migration is created.
 
