@@ -1,0 +1,26 @@
+<UserControl x:Class="GD.SaveEditor.Presentation.Views.Stash.StashView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:stashVm="clr-namespace:GD.SaveEditor.Presentation.ViewModels.Stash"
+             xmlns:local="clr-namespace:GD.SaveEditor.Presentation.Views.Stash"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=stashVm:StashViewModel, IsDesignTimeCreatable=False}"
+             d:DesignHeight="800" d:DesignWidth="900">
+
+    <!--
+        "Stash" tab: the personal stash (tabs 1 to 8; the ones not bought in the game are locked) and the shared stash
+        of every character of the same mode, side by side when there is room. Items can be moved inside each stash;
+        changes are written on Save (the shared stash into transfer.gst / transfer.gsh).
+    -->
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+        <WrapPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,8,0,0">
+            <local:StashGroupView DataContext="{Binding Personal}" />
+            <!-- The border keeps this tab's data context, so the stash card is hidden while there is no shared stash. -->
+            <Border Visibility="{Binding HasTransfer, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <local:StashGroupView DataContext="{Binding Transfer}" />
+            </Border>
+        </WrapPanel>
+    </ScrollViewer>
+</UserControl>

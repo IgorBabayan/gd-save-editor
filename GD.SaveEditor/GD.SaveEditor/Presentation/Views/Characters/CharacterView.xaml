@@ -8,6 +8,7 @@
              xmlns:inventoryViews="clr-namespace:GD.SaveEditor.Presentation.Views.Inventory"
              xmlns:waypointsViews="clr-namespace:GD.SaveEditor.Presentation.Views.Waypoints"
              xmlns:factionsViews="clr-namespace:GD.SaveEditor.Presentation.Views.Factions"
+             xmlns:stashViews="clr-namespace:GD.SaveEditor.Presentation.Views.Stash"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=charactersVm:CharacterViewModel, IsDesignTimeCreatable=False}"
              d:DesignHeight="700" d:DesignWidth="900">
@@ -28,6 +29,11 @@
                     <inventoryViews:InventoryView DataContext="{Binding Inventory}" />
                 </StackPanel>
             </ScrollViewer>
+        </TabItem>
+
+        <!-- Personal stash tabs 1 to 8 and the shared stash of the character's mode. -->
+        <TabItem x:Name="StashTab" Header="Stash">
+            <stashViews:StashView DataContext="{Binding Stash}" />
         </TabItem>
 
         <TabItem x:Name="WaypointsTab" Header="Waypoints">

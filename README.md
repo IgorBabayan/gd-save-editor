@@ -16,7 +16,7 @@
   - **Settings**: theme, saves folder (default `Documents\My Games\Grim Dawn\save\main`) and game folder.
 - **Automatic updates** for copies installed with the installer: on start the editor checks the latest GitHub release, downloads and verifies the new installer (progress shown as a toast, can be cancelled), counts down and restarts into the new version. Turn it off, change the countdown or update manually in **Settings → Updates** (*Check for updates* / *Download and update*). Unpacked or development builds are never updated.
 - Character list (a quarter of the window) split into **Softcore** and **Hardcore** tabs, each with a **Show only SSF characters** filter.
-- Character details with **Inventory**, **Waypoints** and **Factions** tabs.
+- Character details with **Character** (equipment, attributes and bags), **Stash**, **Waypoints** and **Factions** tabs.
 - **Character panel** (beside the equipment): name, sex, unlocked difficulty (Normal / Elite / Ultimate), Crucible
   tributes, physique, cunning, spirit, and unspent attribute, skill and devotion points (at most 55). Changed values are
   highlighted and written on **Save**; base health and energy follow physique and spirit like in the game; Esc or the
@@ -29,6 +29,12 @@
   with the game's tooltip, and the parts an item can take: prefix, suffix, crafting bonus, component and augment for
   gear, completion bonus (the ones the relic rolls are listed first) and crafting bonus for relics. The seed the game
   rolls the values from can be typed or rerolled; components, augments and consumables take a stack size.
+- **Stash**: the **personal stash** (tabs 1–8; a tab the character has not bought in the game yet is not in the save
+  file, so it is shown locked and nothing can be put there) and the **shared stash** of every softcore or every
+  hardcore character (`transfer.gst` / `transfer.gsh` in the `save` folder above `save\main`). Items are dragged,
+  built, changed and removed like in the bags; each stash has its own undo button. **Save** writes the personal stash
+  into `player.gdc` and, when it was changed, the shared stash into its own file (kept as `transfer.gst.<date>.bak`).
+  The shared stash is the same for every character of a mode, so its changes stay while another character is selected.
 - **Waypoints** (needs the game database built with the game folder set): the rift gates of every campaign — base
   campaign (Acts 1–3, 30), Ashes of Malmouth (10), Forgotten Gods (13) and Fangs of Asterkarn (19) — for Normal, Elite
   and Ultimate. Tick single waypoints, **Unlock all** of a campaign, unlock everything in the selected difficulty or in

@@ -49,6 +49,15 @@ public sealed record CharacterSave
     /// <summary>Reputation with every faction; <c>null</c> when that part of the file could not be read.</summary>
     public CharacterFactions? Factions { get; init; }
 
+    /// <summary>Tabs of the personal stash the character bought; <c>null</c> when that part of the file could not be read.</summary>
+    public CharacterStash? Stash { get; init; }
+
+    /// <summary>
+    /// int32 fields the file stores after the stack count of every item (see <see cref="CharacterFile.ItemExtraFields"/>);
+    /// <c>null</c> when the bags could not be read.
+    /// </summary>
+    public int? ItemExtraFields { get; init; }
+
     /// <summary>Iron bits the character carries; <c>null</c> when that part of the file could not be read.</summary>
     public uint? Money { get; init; }
 

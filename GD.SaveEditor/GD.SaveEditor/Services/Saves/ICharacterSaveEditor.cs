@@ -3,10 +3,10 @@ using GD.SaveEditor.Services.Saves.Models;
 namespace GD.SaveEditor.Services.Saves;
 
 /// <summary>
-/// An item put on a bag at its new top-left cell: an item of the save file (by where it was read), possibly changed in
-/// the item builder, or a new one.
+/// An item put on a bag (or a stash tab) at its new top-left cell: an item of the save file (by where it was read),
+/// possibly changed in the item builder, or a new one.
 /// </summary>
-/// <param name="FromBag">Bag the item was read from; <see cref="New"/> for an item made in the editor.</param>
+/// <param name="FromBag">Bag (or stash tab) the item was read from; <see cref="New"/> for an item made in the editor.</param>
 /// <param name="FromIndex">Position of the item in that bag's list; <see cref="New"/> for an item made in the editor.</param>
 /// <param name="Item">
 /// The item to write. <c>null</c> keeps the item of the save file exactly as it was read (only its cell changes); a
@@ -48,17 +48,21 @@ public sealed record FactionChange(int Index, float Value);
 /// New reputation values; the other factions stay as they are. A changed faction is also marked as modified and
 /// unlocked, so the game shows it in its faction window.
 /// </param>
+/// <param name="Stash">
+/// New contents of every tab of the personal stash the character bought, in tab order, like <paramref name="Bags"/>.
+/// </param>
 public sealed record CharacterChanges(
     uint? Money = null,
     IReadOnlyList<IReadOnlyList<PlacedItem>>? Bags = null,
     IReadOnlyList<EquipmentChange>? Equipment = null,
     ProfileChanges? Profile = null,
     CharacterWaypoints? Waypoints = null,
-    IReadOnlyList<FactionChange>? Factions = null)
+    IReadOnlyList<FactionChange>? Factions = null,
+    IReadOnlyList<IReadOnlyList<PlacedItem>>? Stash = null)
 {
     public bool IsEmpty =>
         Money is null && Bags is null && Equipment is not { Count: > 0 } && Profile is null or { IsEmpty: true }
-        && Waypoints is null && Factions is not { Count: > 0 };
+        && Waypoints is null && Factions is not { Count: > 0 } && Stash is null;
 }
 
 public interface ICharacterSaveEditor

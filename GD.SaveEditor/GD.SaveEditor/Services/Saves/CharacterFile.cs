@@ -13,8 +13,8 @@ namespace GD.SaveEditor.Services.Saves;
 /// <c>int32 id, int32 length (key unchanged), body, int32 0 (key unchanged)</c>.
 /// <para>
 /// Block 1 holds the iron bits, block 2 ("bio") level, experience, unspent points and attributes, block 3 the bags
-/// and the equipment, block 6 the unlocked waypoints, block 13 the reputation with every faction. The other blocks after them (stash, skills, factions, UI,
-/// statistics, ...) are read value by
+/// and the equipment, block 4 the personal stash, block 6 the unlocked waypoints, block 13 the reputation with every
+/// faction. The other blocks after them (skills, UI, statistics, ...) are read value by
 /// value as well, only so the file can be encrypted again after a change (see <see cref="GdcWriter"/>): every value
 /// has to be read with its exact size.
 /// </para>
@@ -74,6 +74,9 @@ public sealed class CharacterFile
 
     /// <summary>Reputation with every faction (block 13); <c>null</c> when the block could not be read.</summary>
     public CharacterFactions? Factions { get; private set; }
+
+    /// <summary>The personal stash (block 4); <c>null</c> when the block could not be read.</summary>
+    public CharacterStash? Stash { get; private set; }
 
     /// <summary>
     /// File offsets of the values of every faction, in the order of <see cref="Factions"/>, to change them in place
@@ -147,6 +150,16 @@ public sealed class CharacterFile
     /// </summary>
     public WaypointTokenLayout? WaypointLayout { get; private set; }
 
+    /// <summary>
+    /// Where the personal stash tabs (block 4) are in <see cref="Tokens"/>, to write the items back in other places;
+    /// <c>null</c> unless read with <c>recordTokens</c>.
+    /// </summary>
+    public StashTokenLayout? StashLayout { get; private set; }
+
+    private int _stashLengthToken = -1;
+    private int _stashEndToken = -1;
+    private List<StashTabTokenLayout>? _stashTabs;
+
     private int _teleportLengthToken = -1;
     private int _teleportEndToken = -1;
     private List<UidListTokenLayout>? _teleportLists;
@@ -207,6 +220,9 @@ public sealed class CharacterFile
         if (recordTokens && file.RewriteError is null && file._teleportLists is { Count: > 0 } lists
             && file._teleportLengthToken >= 0 && file._teleportEndToken >= 0)
             file.WaypointLayout = new WaypointTokenLayout(file._teleportLengthToken, file._teleportEndToken, lists);
+        if (recordTokens && file.RewriteError is null && file._stashTabs is { } tabs
+            && file._stashLengthToken >= 0 && file._stashEndToken >= 0)
+            file.StashLayout = new StashTokenLayout(file._stashLengthToken, file._stashEndToken, tabs);
         return file;
     }
 
@@ -236,6 +252,8 @@ public sealed class CharacterFile
                 ReadBlockAfterInventory(reader, id, end);
                 if (id == TeleportBlockId && _teleportLists is not null)
                     (_teleportLengthToken, _teleportEndToken) = (blockToken + 1, reader.TokenCount);
+                if (id == StashBlockId && _stashTabs is not null)
+                    (_stashLengthToken, _stashEndToken) = (blockToken + 1, reader.TokenCount);
             }
 
             reader.ReadBlockEnd(end);
@@ -503,7 +521,7 @@ public sealed class CharacterFile
     }
 
     /// <summary>Extra int32 fields per item to try, the one known for <paramref name="version"/> first.</summary>
-    private static IEnumerable<int> ExtraItemFieldCandidates(int version)
+    internal static IEnumerable<int> ExtraItemFieldCandidates(int version)
     {
         var expected = version >= 11 ? 4 : 0;
         yield return expected;
@@ -594,7 +612,7 @@ public sealed class CharacterFile
         return true;
     }
 
-    private static bool IsItemRecord(SaveItem item) =>
+    internal static bool IsItemRecord(SaveItem item) =>
         item.BaseRecord.StartsWith("records/", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
@@ -605,7 +623,7 @@ public sealed class CharacterFile
     /// [newer inventory versions: <paramref name="extraFields"/> x int32]
     /// </code>
     /// </summary>
-    private static SaveItem ReadItem(GdcReader reader, int extraFields)
+    internal static SaveItem ReadItem(GdcReader reader, int extraFields)
     {
         var item = new SaveItem(
             BaseRecord: reader.ReadString(),
@@ -637,39 +655,73 @@ public sealed class CharacterFile
     #region Blocks after the inventory
 
     /// <summary>
-    /// Character stash, version 6+: <c>int32 tabCount</c>, then a block (id 0) per tab:
-    /// <c>int32 width, int32 height, int32 count, count x (item, float x, float y)</c>, then int32 fields that are
-    /// zero in every known save (five in version 11).
+    /// Character stash, version 6+: <c>int32 tabCount</c>, then a tab (see <see cref="ReadStashTab"/>) per tab the
+    /// character bought.
     /// </summary>
     private void ReadStash(GdcReader reader)
     {
-        var tabs = ReadCount(reader);
-        for (var tab = 0; tab < tabs; tab++)
+        var count = ReadCount(reader);
+        var tabs = new List<StashTab>(count);
+        var layouts = new List<StashTabTokenLayout>(count);
+        for (var i = 0; i < count; i++)
         {
-            var (id, end) = reader.ReadBlockStart();
-            if (id != 0)
-                throw new InvalidDataException($"Unexpected block {id} in the stash.");
-
-            reader.ReadUInt32(); // width
-            reader.ReadUInt32(); // height
-            var count = ReadCount(reader);
-            for (var i = 0; i < count; i++)
-            {
-                if (!IsItemRecord(ReadItem(reader, _itemExtraFields)))
-                    throw new InvalidDataException("A stash item does not fit the item layout.");
-                reader.ReadSingle();
-                reader.ReadSingle();
-            }
-
-            while (reader.Position < end)
-            {
-                if (end - reader.Position < 4 || reader.ReadUInt32() != 0)
-                    throw new InvalidDataException("The stash has data this editor does not know.");
-            }
-
-            reader.ReadBlockEnd(end);
+            var (tab, layout) = ReadStashTab(reader, _itemExtraFields);
+            tabs.Add(tab);
+            layouts.Add(layout);
         }
+
+        Stash = new CharacterStash(tabs);
+        _stashTabs = layouts;
     }
+
+    /// <summary>
+    /// A stash tab, in the character stash and in the transfer stash: a block (id 0) with
+    /// <c>int32 width, int32 height, int32 count, count x (item, float x, float y)</c>, then int32 fields that are zero
+    /// in every known save (five in version 11). The zeros are kept as they are when the tab is written again.
+    /// </summary>
+    internal static (StashTab Tab, StashTabTokenLayout Layout) ReadStashTab(GdcReader reader, int extraFields)
+    {
+        var start = reader.TokenCount;
+        var (id, end) = reader.ReadBlockStart();
+        if (id != 0)
+            throw new InvalidDataException($"Unexpected block {id} in the stash.");
+
+        var width = reader.ReadInt32();
+        var height = reader.ReadInt32();
+        if (width is < 1 or > 100 || height is < 1 or > 100)
+            throw new InvalidDataException($"A stash tab has an invalid size ({width} x {height}).");
+
+        var countToken = reader.TokenCount;
+        var count = ReadCount(reader);
+        var items = new List<StashItem>(count);
+        var itemLayouts = new List<ItemTokenLayout>(count);
+        for (var i = 0; i < count; i++)
+        {
+            var itemStart = reader.TokenCount;
+            var item = ReadItem(reader, extraFields);
+            var xToken = reader.TokenCount;
+            var x = reader.ReadSingle();
+            var yToken = reader.TokenCount;
+            var y = reader.ReadSingle();
+            if (!IsItemRecord(item) || !IsCell(x) || !IsCell(y))
+                throw new InvalidDataException("A stash item does not fit the item layout.");
+            items.Add(new StashItem(item, x, y));
+            itemLayouts.Add(new ItemTokenLayout(itemStart, reader.TokenCount, xToken, yToken));
+        }
+
+        var itemsEnd = reader.TokenCount;
+        while (reader.Position < end)
+        {
+            if (end - reader.Position < 4 || reader.ReadUInt32() != 0)
+                throw new InvalidDataException("The stash has data this editor does not know.");
+        }
+
+        var endToken = reader.TokenCount;
+        reader.ReadBlockEnd(end);
+        return (new StashTab(width, height, items), new StashTabTokenLayout(start, countToken, itemsEnd, endToken, itemLayouts));
+    }
+
+    private static bool IsCell(float value) => float.IsFinite(value) && value is >= 0 and <= 1000;
 
     /// <summary>
     /// Waypoints (block 6, version 1): for Normal, Elite and Ultimate <c>int32 count, count x 16-byte id</c> of the
@@ -884,7 +936,7 @@ public sealed class CharacterFile
             reader.ReadString();
     }
 
-    private static int ReadCount(GdcReader reader)
+    internal static int ReadCount(GdcReader reader)
     {
         var count = reader.ReadInt32();
         if (count is < 0 or > MaxCount)
@@ -912,6 +964,16 @@ public sealed record InventoryTokenLayout(int LengthToken, int EndToken, IReadOn
 /// in an empty slot), then the "attached" flag at <c>AttachedToken</c>.
 /// </summary>
 public sealed record SlotTokenLayout(EquipmentSlot Slot, int WeaponSet, int Start, int End, int AttachedToken);
+
+/// <summary>
+/// Values of one stash tab in <see cref="CharacterFile.Tokens"/>: id at <c>Start</c>, length at <c>Start + 1</c>, width
+/// and height, the item count at <c>CountToken</c>, the items, the zero fields from <c>ItemsEnd</c> and the end marker at
+/// <c>EndToken</c>. The x and y of every item are floats.
+/// </summary>
+public sealed record StashTabTokenLayout(int Start, int CountToken, int ItemsEnd, int EndToken, IReadOnlyList<ItemTokenLayout> Items);
+
+/// <summary>Values of the stash block (4): its length, its end marker and its tabs (stored one after another).</summary>
+public sealed record StashTokenLayout(int LengthToken, int EndToken, IReadOnlyList<StashTabTokenLayout> Tabs);
 
 /// <summary>File offsets of the "modified" and "unlocked" flags and of the value of one faction (block 13).</summary>
 public sealed record FactionValueOffsets(int Modified, int Unlocked, int Value);

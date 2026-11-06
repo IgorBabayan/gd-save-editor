@@ -42,6 +42,8 @@ static class ServiceCollectionExtensions
             services.AddSingleton<ISaveFolderLoader, SaveFolderLoader>();
             services.AddSingleton<ICharacterSaveWriter, CharacterSaveWriter>();
             services.AddSingleton<ICharacterSaveEditor, CharacterSaveEditor>();
+            // Shared stash (transfer.gst / transfer.gsh)
+            services.AddSingleton<ITransferStashService, TransferStashService>();
 
             // Game data (%APPDATA%\GD.SaveEditor\database.db) built from the game's .arz / .arc files
             services.AddSingleton<IGameFileProvider, GameFileProvider>();
@@ -67,7 +69,7 @@ static class ServiceCollectionExtensions
             // Notification center (bell in the title bar)
             services.AddSingleton<NotificationCenterViewModel>();
 
-            // Character details (Character / Inventory / Waypoints / Factions tabs)
+            // Character details (Character / Stash / Waypoints / Factions tabs)
             services.AddSingleton<CharacterViewModelFactory>();
 
             // Shell
