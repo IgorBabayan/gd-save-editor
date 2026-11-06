@@ -290,10 +290,13 @@
         </ResourceDictionary>
     </UserControl.Resources>
 
-    <!-- The bags under the equipment, like the game's inventory screen. -->
+    <!--
+        The bags under the equipment, like the game's inventory screen. The card stretches to the width of the
+        equipment and attributes row above it (CharacterView), with the bags centered in it.
+    -->
     <Border Margin="0,0,0,16"
             Padding="14"
-            HorizontalAlignment="Left"
+            HorizontalAlignment="Stretch"
             CornerRadius="6"
             BorderThickness="1"
             BorderBrush="{DynamicResource ControlBorderBrush}"
@@ -306,7 +309,7 @@
                        Text="The bags could not be read from the save file."
                        Visibility="{Binding HasInventory, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
 
-            <WrapPanel Orientation="Horizontal">
+            <WrapPanel Orientation="Horizontal" HorizontalAlignment="Center">
 
                 <!-- ===== Main bag with the iron bits above it ===== -->
                 <StackPanel Margin="0,0,16,0">

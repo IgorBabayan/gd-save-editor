@@ -16,10 +16,13 @@
         (only its DataContext is replaced), so the open tab is kept when switching between characters.
     -->
     <TabControl x:Name="Tabs" Style="{StaticResource UnderlineTabControlStyle}">
-        <!-- Equipment and attributes, with the bags under them like in the game; both scroll together. -->
+        <!--
+            Equipment and attributes, with the bags under them like in the game; both scroll together.
+            The page is centered and as wide as its widest part, so the bags card lines up with the row above it.
+        -->
         <TabItem x:Name="CharacterTab" Header="Character">
             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
-                <StackPanel>
+                <StackPanel HorizontalAlignment="Center">
                     <local:CharacterEquipmentView DataContext="{Binding Equipment}" />
                     <inventoryViews:InventoryView DataContext="{Binding Inventory}" />
                 </StackPanel>

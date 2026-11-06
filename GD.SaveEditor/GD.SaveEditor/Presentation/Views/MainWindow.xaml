@@ -10,17 +10,23 @@
         xmlns:wpf="clr-namespace:Material.Icons.WPF;assembly=Material.Icons.WPF"
         xmlns:toastViews="clr-namespace:GD.SaveEditor.Presentation.Views.Toasts"
         xmlns:characterViews="clr-namespace:GD.SaveEditor.Presentation.Views.Characters"
+        xmlns:controls="clr-namespace:GD.SaveEditor.Presentation.Controls"
         mc:Ignorable="d"
         d:DataContext="{d:DesignInstance Type=shellVm:MainViewModel, IsDesignTimeCreatable=False}"
         Title="Grim Dawn Save Editor"
         WindowStartupLocation="CenterScreen"
         ResizeMode="NoResize"
+        SizeToContent="WidthAndHeight"
+        MinWidth="960"
+        MinHeight="640"
         Background="{DynamicResource WindowBackgroundBrush}"
         Foreground="{DynamicResource WindowForegroundBrush}">
 
     <!--
         WindowChrome removes the native title bar but keeps native behaviour, like any Windows window:
-        drag to move, Alt+Space menu. The window has a fixed size (ResizeMode="NoResize"): it cannot be resized or maximized.
+        drag to move, Alt+Space menu. The window cannot be resized or maximized by the user (ResizeMode="NoResize"):
+        it sizes itself to its content (SizeToContent), never below MinWidth / MinHeight nor above the screen's work
+        area (content scrolls then), and stays centered as it grows (see MainWindow.xaml.cs).
         Minimize / Maximize / Close are drawn in the title bar; Maximize is shown disabled, as Windows does for such windows.
     -->
     <shell:WindowChrome.WindowChrome>
@@ -331,7 +337,7 @@
                             ToolTip="Minimize"
                             Content="&#xE921;"
                             Command="{x:Static SystemCommands.MinimizeWindowCommand}" />
-                    <!-- Maximize: shown but always disabled, the window has a fixed size (as Windows does for such windows). -->
+                    <!-- Maximize: shown but always disabled, the window sizes itself (as Windows does for non-resizable windows). -->
                     <Button x:Name="MaximizeButton"
                             Style="{StaticResource CaptionButtonStyle}"
                             Content="&#xE922;"
@@ -349,112 +355,119 @@
             <!-- ===== Window content: characters (left) | details of the selected character (right) ===== -->
             <Grid Grid.Row="1">
                 <Grid.ColumnDefinitions>
-                    <!-- Characters take a quarter of the width; the splitter between the columns resizes them. -->
-                    <ColumnDefinition Width="1*" MinWidth="220" />
+                    <!--
+                        Characters have a fixed width and the details take the rest (the splitter between them resizes
+                        the columns). Not star ratios: the window sizes to its content, and a ratio would then squeeze
+                        the details into three quarters of a width measured for both columns.
+                    -->
+                    <ColumnDefinition Width="280" MinWidth="220" />
                     <ColumnDefinition Width="Auto" />
-                    <ColumnDefinition Width="3*" MinWidth="300" />
+                    <ColumnDefinition Width="*" MinWidth="300" />
                 </Grid.ColumnDefinitions>
 
                 <!-- ===== Characters ===== -->
-                <Grid Grid.Column="0" Background="{DynamicResource TitleBarBackgroundBrush}">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
+                <!-- The list fills the height the details give the window, a long list scrolls instead of growing it. -->
+                <controls:FillHeightDecorator Grid.Column="0">
+                    <Grid Background="{DynamicResource TitleBarBackgroundBrush}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
 
-                    <TextBlock Grid.Row="0"
-                               Margin="16,14,16,8"
-                               Text="Characters"
-                               Style="{StaticResource SectionHeaderTextStyle}" />
+                        <TextBlock Grid.Row="0"
+                                   Margin="16,14,16,8"
+                                   Text="Characters"
+                                   Style="{StaticResource SectionHeaderTextStyle}" />
 
-                    <!-- Softcore / Hardcore tabs; each keeps its own selection. -->
-                    <TabControl Grid.Row="1"
-                                Margin="16,0"
-                                Style="{StaticResource PillTabControlStyle}"
-                                SelectedIndex="{Binding SelectedCharacterTabIndex, Mode=TwoWay}"
-                                Visibility="{Binding HasCharacters, Converter={StaticResource BooleanToVisibilityConverter}}">
-                        <TabItem Header="Softcore">
-                            <!-- Negative side margins undo the TabControl margin, so the list spans the whole panel. -->
-                            <Grid Margin="-16,10,-16,0">
-                                <ListBox Style="{StaticResource PlainListBoxStyle}"
-                                         ItemContainerStyle="{StaticResource ListRowItemStyle}"
-                                         ItemTemplate="{StaticResource CharacterListItemTemplate}"
-                                         ItemsSource="{Binding SoftcoreCharacters}"
-                                         SelectedItem="{Binding SelectedSoftcoreCharacter, Mode=TwoWay}"
-                                         Visibility="{Binding HasVisibleSoftcoreCharacters, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        <!-- Softcore / Hardcore tabs; each keeps its own selection. -->
+                        <TabControl Grid.Row="1"
+                                    Margin="16,0"
+                                    Style="{StaticResource PillTabControlStyle}"
+                                    SelectedIndex="{Binding SelectedCharacterTabIndex, Mode=TwoWay}"
+                                    Visibility="{Binding HasCharacters, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <TabItem Header="Softcore">
+                                <!-- Negative side margins undo the TabControl margin, so the list spans the whole panel. -->
+                                <Grid Margin="-16,10,-16,0">
+                                    <ListBox Style="{StaticResource PlainListBoxStyle}"
+                                             ItemContainerStyle="{StaticResource ListRowItemStyle}"
+                                             ItemTemplate="{StaticResource CharacterListItemTemplate}"
+                                             ItemsSource="{Binding SoftcoreCharacters}"
+                                             SelectedItem="{Binding SelectedSoftcoreCharacter, Mode=TwoWay}"
+                                             Visibility="{Binding HasVisibleSoftcoreCharacters, Converter={StaticResource BooleanToVisibilityConverter}}" />
 
-                                <TextBlock Margin="16,8" VerticalAlignment="Top"
-                                           Text="No softcore characters to show."
-                                           TextWrapping="Wrap"
-                                           Style="{StaticResource SecondaryTextStyle}"
-                                           Visibility="{Binding HasVisibleSoftcoreCharacters, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
-                            </Grid>
-                        </TabItem>
+                                    <TextBlock Margin="16,8" VerticalAlignment="Top"
+                                               Text="No softcore characters to show."
+                                               TextWrapping="Wrap"
+                                               Style="{StaticResource SecondaryTextStyle}"
+                                               Visibility="{Binding HasVisibleSoftcoreCharacters, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
+                                </Grid>
+                            </TabItem>
 
-                        <TabItem Header="Hardcore">
-                            <!-- Negative side margins undo the TabControl margin, so the list spans the whole panel. -->
-                            <Grid Margin="-16,10,-16,0">
-                                <ListBox Style="{StaticResource PlainListBoxStyle}"
-                                         ItemContainerStyle="{StaticResource ListRowItemStyle}"
-                                         ItemTemplate="{StaticResource CharacterListItemTemplate}"
-                                         ItemsSource="{Binding HardcoreCharacters}"
-                                         SelectedItem="{Binding SelectedHardcoreCharacter, Mode=TwoWay}"
-                                         Visibility="{Binding HasVisibleHardcoreCharacters, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                            <TabItem Header="Hardcore">
+                                <!-- Negative side margins undo the TabControl margin, so the list spans the whole panel. -->
+                                <Grid Margin="-16,10,-16,0">
+                                    <ListBox Style="{StaticResource PlainListBoxStyle}"
+                                             ItemContainerStyle="{StaticResource ListRowItemStyle}"
+                                             ItemTemplate="{StaticResource CharacterListItemTemplate}"
+                                             ItemsSource="{Binding HardcoreCharacters}"
+                                             SelectedItem="{Binding SelectedHardcoreCharacter, Mode=TwoWay}"
+                                             Visibility="{Binding HasVisibleHardcoreCharacters, Converter={StaticResource BooleanToVisibilityConverter}}" />
 
-                                <TextBlock Margin="16,8" VerticalAlignment="Top"
-                                           Text="No hardcore characters to show."
-                                           TextWrapping="Wrap"
-                                           Style="{StaticResource SecondaryTextStyle}"
-                                           Visibility="{Binding HasVisibleHardcoreCharacters, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
-                            </Grid>
-                        </TabItem>
-                    </TabControl>
+                                    <TextBlock Margin="16,8" VerticalAlignment="Top"
+                                               Text="No hardcore characters to show."
+                                               TextWrapping="Wrap"
+                                               Style="{StaticResource SecondaryTextStyle}"
+                                               Visibility="{Binding HasVisibleHardcoreCharacters, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
+                                </Grid>
+                            </TabItem>
+                        </TabControl>
 
-                    <!-- Empty / loading states -->
-                    <StackPanel Grid.Row="1" Margin="16,8" VerticalAlignment="Top"
-                                Visibility="{Binding ShowNoSaveFolder, Converter={StaticResource BooleanToVisibilityConverter}}">
-                        <TextBlock Text="No save folder selected." TextWrapping="Wrap" Style="{StaticResource SecondaryTextStyle}" />
-                        <Button Margin="0,12,0,0"
-                                HorizontalAlignment="Left"
-                                Content="Open settings"
-                                Style="{StaticResource DialogButtonStyle}"
-                                Command="{Binding OpenSettingsCommand}" />
-                    </StackPanel>
+                        <!-- Empty / loading states -->
+                        <StackPanel Grid.Row="1" Margin="16,8" VerticalAlignment="Top"
+                                    Visibility="{Binding ShowNoSaveFolder, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <TextBlock Text="No save folder selected." TextWrapping="Wrap" Style="{StaticResource SecondaryTextStyle}" />
+                            <Button Margin="0,12,0,0"
+                                    HorizontalAlignment="Left"
+                                    Content="Open settings"
+                                    Style="{StaticResource DialogButtonStyle}"
+                                    Command="{Binding OpenSettingsCommand}" />
+                        </StackPanel>
 
-                    <TextBlock Grid.Row="1" Margin="16,8" VerticalAlignment="Top"
-                               Text="Loading characters…"
-                               Style="{StaticResource SecondaryTextStyle}"
-                               Visibility="{Binding ShowLoading, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        <TextBlock Grid.Row="1" Margin="16,8" VerticalAlignment="Top"
+                                   Text="Loading characters…"
+                                   Style="{StaticResource SecondaryTextStyle}"
+                                   Visibility="{Binding ShowLoading, Converter={StaticResource BooleanToVisibilityConverter}}" />
 
-                    <TextBlock Grid.Row="1" Margin="16,8" VerticalAlignment="Top"
-                               Text="No characters found in the save folder."
-                               TextWrapping="Wrap"
-                               Style="{StaticResource SecondaryTextStyle}"
-                               Visibility="{Binding ShowNoCharacters, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        <TextBlock Grid.Row="1" Margin="16,8" VerticalAlignment="Top"
+                                   Text="No characters found in the save folder."
+                                   TextWrapping="Wrap"
+                                   Style="{StaticResource SecondaryTextStyle}"
+                                   Visibility="{Binding ShowNoCharacters, Converter={StaticResource BooleanToVisibilityConverter}}" />
 
-                    <!-- Files that could not be read -->
-                    <TextBlock Grid.Row="2"
-                               Margin="16,8,16,12"
-                               TextWrapping="Wrap"
-                               Foreground="{DynamicResource WarningForegroundBrush}"
-                               Text="{Binding LoadErrors.Count, StringFormat='{}{0} save file(s) could not be read'}"
-                               Visibility="{Binding HasLoadErrors, Converter={StaticResource BooleanToVisibilityConverter}}">
-                        <TextBlock.ToolTip>
-                            <ItemsControl ItemsSource="{Binding LoadErrors}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate DataType="{x:Type models:SaveFileError}">
-                                        <TextBlock Margin="0,2">
-                                            <Run Text="{Binding FilePath, Mode=OneWay}" FontWeight="SemiBold" />
-                                            <Run Text=": " />
-                                            <Run Text="{Binding Message, Mode=OneWay}" />
-                                        </TextBlock>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </TextBlock.ToolTip>
-                    </TextBlock>
-                </Grid>
+                        <!-- Files that could not be read -->
+                        <TextBlock Grid.Row="2"
+                                   Margin="16,8,16,12"
+                                   TextWrapping="Wrap"
+                                   Foreground="{DynamicResource WarningForegroundBrush}"
+                                   Text="{Binding LoadErrors.Count, StringFormat='{}{0} save file(s) could not be read'}"
+                                   Visibility="{Binding HasLoadErrors, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <TextBlock.ToolTip>
+                                <ItemsControl ItemsSource="{Binding LoadErrors}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="{x:Type models:SaveFileError}">
+                                            <TextBlock Margin="0,2">
+                                                <Run Text="{Binding FilePath, Mode=OneWay}" FontWeight="SemiBold" />
+                                                <Run Text=": " />
+                                                <Run Text="{Binding Message, Mode=OneWay}" />
+                                            </TextBlock>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </TextBlock.ToolTip>
+                        </TextBlock>
+                    </Grid>
+                </controls:FillHeightDecorator>
 
                 <!-- 1px divider with a wider, invisible grab area for resizing. -->
                 <Rectangle Grid.Column="1" Width="1" Fill="{DynamicResource WindowBorderBrush}" />

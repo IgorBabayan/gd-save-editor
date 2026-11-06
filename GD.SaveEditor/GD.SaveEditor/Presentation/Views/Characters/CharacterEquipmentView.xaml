@@ -137,7 +137,8 @@
                 BorderThickness="1"
                 BorderBrush="{DynamicResource ErrorForegroundBrush}"
                 Visibility="{Binding HasError, Converter={StaticResource BooleanToVisibilityConverter}}">
-            <TextBlock Text="{Binding ErrorText}" TextWrapping="Wrap" Foreground="{DynamicResource ErrorForegroundBrush}" />
+            <!-- MaxWidth: the window sizes to its content, a long message must wrap rather than widen it. -->
+            <TextBlock MaxWidth="900" HorizontalAlignment="Left" Text="{Binding ErrorText}" TextWrapping="Wrap" Foreground="{DynamicResource ErrorForegroundBrush}" />
         </Border>
 
         <!-- Names and icons need database.db. -->
@@ -147,7 +148,9 @@
                 BorderThickness="1"
                 BorderBrush="{DynamicResource WarningForegroundBrush}"
                 Visibility="{Binding ShowDatabaseHint, Converter={StaticResource BooleanToVisibilityConverter}}">
-            <TextBlock TextWrapping="Wrap"
+            <TextBlock MaxWidth="900"
+                       HorizontalAlignment="Left"
+                       TextWrapping="Wrap"
                        Foreground="{DynamicResource WarningForegroundBrush}"
                        Text="Items are shown by their record names. Generate the game database (database button in the title bar) to see item names and icons." />
         </Border>
