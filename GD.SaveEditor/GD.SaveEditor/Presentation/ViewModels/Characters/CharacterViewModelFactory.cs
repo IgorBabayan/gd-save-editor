@@ -13,7 +13,9 @@ public sealed class CharacterViewModelFactory(
     IGameIconProvider icons,
     ICharacterSaveEditor saveEditor,
     IDialogService dialogs,
-    IGameWaypointProvider waypoints)
+    IGameWaypointProvider waypoints,
+    IGameTextProvider texts)
 {
-    public CharacterViewModel Create(CharacterSave character) => new(character, items, icons, saveEditor, dialogs, waypoints);
+    public CharacterViewModel Create(CharacterSave character) =>
+        new(character, items, icons, saveEditor, dialogs, waypoints, texts);
 }

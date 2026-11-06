@@ -13,7 +13,7 @@ namespace GD.SaveEditor.Services.Saves;
 /// <c>int32 id, int32 length (key unchanged), body, int32 0 (key unchanged)</c>.
 /// <para>
 /// Block 1 holds the iron bits, block 2 ("bio") level, experience, unspent points and attributes, block 3 the bags
-/// and the equipment, block 6 the unlocked waypoints. The other blocks after them (stash, skills, factions, UI,
+/// and the equipment, block 6 the unlocked waypoints, block 13 the reputation with every faction. The other blocks after them (stash, skills, factions, UI,
 /// statistics, ...) are read value by
 /// value as well, only so the file can be encrypted again after a change (see <see cref="GdcWriter"/>): every value
 /// has to be read with its exact size.
@@ -71,6 +71,15 @@ public sealed class CharacterFile
 
     /// <summary>Unlocked waypoints (block 6) per difficulty; <c>null</c> when the block could not be read.</summary>
     public CharacterWaypoints? Waypoints { get; private set; }
+
+    /// <summary>Reputation with every faction (block 13); <c>null</c> when the block could not be read.</summary>
+    public CharacterFactions? Factions { get; private set; }
+
+    /// <summary>
+    /// File offsets of the values of every faction, in the order of <see cref="Factions"/>, to change them in place
+    /// (see <see cref="CharacterSaveEditor"/>); <c>null</c> when the block could not be read.
+    /// </summary>
+    public IReadOnlyList<FactionValueOffsets>? FactionOffsets { get; private set; }
 
     /// <summary>Iron bits; <c>null</c> when block 1 could not be read.</summary>
     public uint? Money { get; private set; }
@@ -748,19 +757,33 @@ public sealed class CharacterFile
             throw new InvalidDataException("The skills have data this editor does not know.");
     }
 
-    /// <summary><c>int32 faction, int32 count, count x (bool modified, bool unlocked, float value, float positiveBoost, float negativeBoost)</c>.</summary>
-    private static void ReadFactions(GdcReader reader)
+    /// <summary>
+    /// Factions (block 13, version 5):
+    /// <c>int32 faction, int32 count, count x (bool modified, bool unlocked, float value, float positiveBoost, float negativeBoost)</c>.
+    /// Every entry has the same size, so a value can be changed in place.
+    /// </summary>
+    private void ReadFactions(GdcReader reader)
     {
         reader.ReadUInt32();
         var count = ReadCount(reader);
+        var factions = new List<FactionStanding>(count);
+        var offsets = new List<FactionValueOffsets>(count);
         for (var i = 0; i < count; i++)
         {
-            reader.ReadBool();
-            reader.ReadBool();
-            reader.ReadSingle();
-            reader.ReadSingle();
-            reader.ReadSingle();
+            var modifiedOffset = reader.Position;
+            var modified = reader.ReadBool();
+            var unlockedOffset = reader.Position;
+            var unlocked = reader.ReadBool();
+            var valueOffset = reader.Position;
+            var value = reader.ReadSingle();
+            var positiveBoost = reader.ReadSingle();
+            var negativeBoost = reader.ReadSingle();
+            factions.Add(new FactionStanding(i, modified, unlocked, value, positiveBoost, negativeBoost));
+            offsets.Add(new FactionValueOffsets(modifiedOffset, unlockedOffset, valueOffset));
         }
+
+        Factions = new CharacterFactions(factions);
+        FactionOffsets = offsets;
     }
 
     /// <summary>
@@ -889,6 +912,9 @@ public sealed record InventoryTokenLayout(int LengthToken, int EndToken, IReadOn
 /// in an empty slot), then the "attached" flag at <c>AttachedToken</c>.
 /// </summary>
 public sealed record SlotTokenLayout(EquipmentSlot Slot, int WeaponSet, int Start, int End, int AttachedToken);
+
+/// <summary>File offsets of the "modified" and "unlocked" flags and of the value of one faction (block 13).</summary>
+public sealed record FactionValueOffsets(int Modified, int Unlocked, int Value);
 
 /// <summary>Values of one list of 16-byte ids: the count at <c>CountToken</c>, the ids' bytes up to <c>End</c> (exclusive).</summary>
 public sealed record UidListTokenLayout(int CountToken, int End);

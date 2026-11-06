@@ -7,6 +7,7 @@
              xmlns:local="clr-namespace:GD.SaveEditor.Presentation.Views.Characters"
              xmlns:inventoryViews="clr-namespace:GD.SaveEditor.Presentation.Views.Inventory"
              xmlns:waypointsViews="clr-namespace:GD.SaveEditor.Presentation.Views.Waypoints"
+             xmlns:factionsViews="clr-namespace:GD.SaveEditor.Presentation.Views.Factions"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=charactersVm:CharacterViewModel, IsDesignTimeCreatable=False}"
              d:DesignHeight="700" d:DesignWidth="900">
@@ -31,6 +32,10 @@
 
         <TabItem x:Name="WaypointsTab" Header="Waypoints">
             <waypointsViews:WaypointsView DataContext="{Binding Waypoints}" />
+        </TabItem>
+
+        <TabItem x:Name="FactionsTab" Header="Factions">
+            <factionsViews:FactionsView DataContext="{Binding Factions}" />
         </TabItem>
     </TabControl>
 </UserControl>

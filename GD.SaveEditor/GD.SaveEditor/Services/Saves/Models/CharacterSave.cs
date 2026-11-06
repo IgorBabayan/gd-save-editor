@@ -46,6 +46,9 @@ public sealed record CharacterSave
     /// <summary>Unlocked waypoints per difficulty; <c>null</c> when that part of the file could not be read.</summary>
     public CharacterWaypoints? Waypoints { get; init; }
 
+    /// <summary>Reputation with every faction; <c>null</c> when that part of the file could not be read.</summary>
+    public CharacterFactions? Factions { get; init; }
+
     /// <summary>Iron bits the character carries; <c>null</c> when that part of the file could not be read.</summary>
     public uint? Money { get; init; }
 

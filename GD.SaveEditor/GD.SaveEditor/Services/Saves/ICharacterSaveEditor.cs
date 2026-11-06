@@ -29,6 +29,9 @@ public sealed record PlacedItem(int FromBag, int FromIndex, int X, int Y, SaveIt
 /// <param name="Item">The item to put in the slot; <c>null</c> empties it.</param>
 public sealed record EquipmentChange(EquipmentSlot Slot, int WeaponSet, SaveItem? Item);
 
+/// <summary>A new reputation for the faction at <paramref name="Index"/> of the faction list (see <see cref="CharacterFactions"/>).</summary>
+public sealed record FactionChange(int Index, float Value);
+
 /// <summary>Changes made in the editor to one character; <c>null</c> values stay as they are in the file.</summary>
 /// <param name="Money">New amount of iron bits.</param>
 /// <param name="Bags">
@@ -41,16 +44,21 @@ public sealed record EquipmentChange(EquipmentSlot Slot, int WeaponSet, SaveItem
 /// The unlocked waypoints of Normal, Elite and Ultimate as they should be stored: they replace the three lists of the
 /// file (see <see cref="CharacterWaypoints"/>).
 /// </param>
+/// <param name="Factions">
+/// New reputation values; the other factions stay as they are. A changed faction is also marked as modified and
+/// unlocked, so the game shows it in its faction window.
+/// </param>
 public sealed record CharacterChanges(
     uint? Money = null,
     IReadOnlyList<IReadOnlyList<PlacedItem>>? Bags = null,
     IReadOnlyList<EquipmentChange>? Equipment = null,
     ProfileChanges? Profile = null,
-    CharacterWaypoints? Waypoints = null)
+    CharacterWaypoints? Waypoints = null,
+    IReadOnlyList<FactionChange>? Factions = null)
 {
     public bool IsEmpty =>
         Money is null && Bags is null && Equipment is not { Count: > 0 } && Profile is null or { IsEmpty: true }
-        && Waypoints is null;
+        && Waypoints is null && Factions is not { Count: > 0 };
 }
 
 public interface ICharacterSaveEditor

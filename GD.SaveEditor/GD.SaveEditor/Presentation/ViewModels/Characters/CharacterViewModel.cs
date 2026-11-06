@@ -1,4 +1,5 @@
 using GD.SaveEditor.Presentation.Services;
+using GD.SaveEditor.Presentation.ViewModels.Factions;
 using GD.SaveEditor.Presentation.ViewModels.Inventory;
 using GD.SaveEditor.Presentation.ViewModels.Waypoints;
 using GD.SaveEditor.Services.GameData.Database;
@@ -11,7 +12,7 @@ namespace GD.SaveEditor.Presentation.ViewModels.Characters;
 
 /// <summary>
 /// Details of the character selected in the character list, split into the "Character" (equipment, attributes and
-/// the bags under them) and "Waypoints" tabs of the main window.
+/// the bags under them), "Waypoints" and "Factions" tabs of the main window.
 /// </summary>
 public sealed partial class CharacterViewModel : ViewModelBase
 {
@@ -23,7 +24,8 @@ public sealed partial class CharacterViewModel : ViewModelBase
         IGameIconProvider icons,
         ICharacterSaveEditor saveEditor,
         IDialogService dialogs,
-        IGameWaypointProvider waypoints)
+        IGameWaypointProvider waypoints,
+        IGameTextProvider texts)
     {
         _saveEditor = saveEditor;
         Character = character;
@@ -31,6 +33,7 @@ public sealed partial class CharacterViewModel : ViewModelBase
         Equipment = new CharacterEquipmentViewModel(character, Profile, items, icons, dialogs);
         Inventory = new InventoryViewModel(character, items, icons, dialogs);
         Waypoints = new WaypointsViewModel(character, waypoints);
+        Factions = new FactionsViewModel(character, texts);
 
         Inventory.PropertyChanged += (_, e) =>
         {
@@ -52,6 +55,11 @@ public sealed partial class CharacterViewModel : ViewModelBase
             if (e.PropertyName == nameof(WaypointsViewModel.HasChanges))
                 RefreshHasUnsavedChanges();
         };
+        Factions.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(FactionsViewModel.HasChanges))
+                RefreshHasUnsavedChanges();
+        };
 
         RefreshHasUnsavedChanges();
     }
@@ -70,6 +78,9 @@ public sealed partial class CharacterViewModel : ViewModelBase
     /// <summary>"Waypoints" tab.</summary>
     public WaypointsViewModel Waypoints { get; }
 
+    /// <summary>"Factions" tab.</summary>
+    public FactionsViewModel Factions { get; }
+
     /// <summary>Something was changed that is not written to the save file yet.</summary>
     [ObservableProperty]
     private bool _hasUnsavedChanges;
@@ -77,15 +88,16 @@ public sealed partial class CharacterViewModel : ViewModelBase
     /// <summary>
     /// The bytes to write into <c>player.gdc</c>: the file as read with the changes made in the tabs (the character
     /// panel, the iron bits, the items moved, added, changed or removed in the bags, the items equipped, changed or
-    /// taken off, and the waypoints unlocked or locked).
+    /// taken off, the waypoints unlocked or locked, and the faction reputations).
     /// </summary>
     /// <exception cref="System.IO.InvalidDataException">The changes cannot be written into this file.</exception>
     public byte[] GetSaveData() =>
         _saveEditor.Apply(Character, new CharacterChanges(
             Money: Inventory.ChangedMoney, Bags: Inventory.ChangedBags, Equipment: Equipment.ChangedEquipment,
-            Profile: Profile.Changes, Waypoints: Waypoints.Changes));
+            Profile: Profile.Changes, Waypoints: Waypoints.Changes, Factions: Factions.Changes));
 
     /// <summary>Call when a tab changed something, so the Save button follows the actual difference to the file.</summary>
     public void RefreshHasUnsavedChanges() =>
-        HasUnsavedChanges = Profile.HasChanges || Equipment.HasChanges || Inventory.HasChanges || Waypoints.HasChanges;
+        HasUnsavedChanges = Profile.HasChanges || Equipment.HasChanges || Inventory.HasChanges || Waypoints.HasChanges
+                            || Factions.HasChanges;
 }

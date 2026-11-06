@@ -6,7 +6,7 @@ namespace GD.SaveEditor.Services.Saves;
 /// <summary>
 /// Writes changes into the bytes of a character file. Every value of a <c>player.gdc</c> moves the encryption key on,
 /// so one changed value changes the encrypted bytes of everything after it: the file is read value by value
-/// (<see cref="CharacterFile"/>), the values are changed (the iron bits; the sex, unlocked difficulty, Crucible tributes,
+/// (<see cref="CharacterFile"/>), the values are changed (the iron bits; the faction reputations; the sex, unlocked difficulty, Crucible tributes,
 /// unspent points and attributes) or rebuilt (the name; the bag blocks, when items were moved, added, changed or removed;
 /// the equipment slots, when items were equipped, changed or taken off; the waypoint lists, when waypoints were unlocked
 /// or locked) and the whole file is encrypted again (<see cref="GdcWriter"/>). The result is read back before it is returned: it
@@ -28,6 +28,10 @@ public sealed class CharacterSaveEditor : ICharacterSaveEditor
 
         if (changes.Money is { } money)
             SetValue(tokens, original.MoneyOffset, money, "The iron bits");
+
+        // Every faction entry has the same size: the values are changed in place, like the iron bits.
+        if (changes.Factions is { Count: > 0 } factions)
+            SetFactions(tokens, original, factions);
 
         // Values of the header, the character info and the bio block keep their size: only the name (below) changes the
         // number of values, and it is replaced last.
@@ -153,6 +157,32 @@ public sealed class CharacterSaveEditor : ICharacterSaveEditor
             return;
         var derived = BitConverter.UInt32BitsToSingle(tokens[derivedIndex].Value) + (attribute - previous) * perPoint;
         tokens[derivedIndex] = tokens[derivedIndex] with { Value = BitConverter.SingleToUInt32Bits(Math.Max(1f, derived)) };
+    }
+
+    /// <summary>
+    /// Writes the reputation of <paramref name="changes"/> into the faction list (block 13) and marks every changed faction
+    /// as modified and unlocked, as the game does once a faction's reputation moved.
+    /// </summary>
+    private static void SetFactions(List<GdcToken> tokens, CharacterFile original, IReadOnlyList<FactionChange> changes)
+    {
+        if (original.FactionOffsets is not { } offsets)
+            throw new InvalidDataException("The factions could not be found in the save file.");
+        if (changes.Select(c => c.Index).Distinct().Count() != changes.Count)
+            throw new InvalidDataException("A faction was changed twice.");
+
+        foreach (var change in changes)
+        {
+            if (change.Index < 0 || change.Index >= offsets.Count)
+                throw new InvalidDataException($"The save file has no faction {change.Index}.");
+            if (!float.IsFinite(change.Value) || change.Value < CharacterFactions.MinValue || change.Value > CharacterFactions.MaxValue)
+                throw new InvalidDataException(
+                    $"A faction's reputation must be from {CharacterFactions.MinValue:N0} to {CharacterFactions.MaxValue:N0}.");
+
+            var faction = offsets[change.Index];
+            SetValue(tokens, faction.Value, BitConverter.SingleToUInt32Bits(change.Value), "The faction reputation");
+            SetValue(tokens, faction.Modified, 1u, "The faction reputation");
+            SetValue(tokens, faction.Unlocked, 1u, "The faction reputation");
+        }
     }
 
     /// <summary>

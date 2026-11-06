@@ -16,7 +16,7 @@
   - **Settings**: theme, saves folder (default `Documents\My Games\Grim Dawn\save\main`) and game folder.
 - **Automatic updates** for copies installed with the installer: on start the editor checks the latest GitHub release, downloads and verifies the new installer (progress shown as a toast, can be cancelled), counts down and restarts into the new version. Turn it off, change the countdown or update manually in **Settings → Updates** (*Check for updates* / *Download and update*). Unpacked or development builds are never updated.
 - Character list (a quarter of the window) split into **Softcore** and **Hardcore** tabs, each with a **Show only SSF characters** filter.
-- Character details with **Inventory** and **Waypoints** tabs.
+- Character details with **Inventory**, **Waypoints** and **Factions** tabs.
 - **Character panel** (beside the equipment): name, sex, unlocked difficulty (Normal / Elite / Ultimate), Crucible
   tributes, physique, cunning, spirit, and unspent attribute, skill and devotion points (at most 55). Changed values are
   highlighted and written on **Save**; base health and energy follow physique and spirit like in the game; Esc or the
@@ -33,6 +33,11 @@
   campaign (Acts 1–3, 30), Ashes of Malmouth (10), Forgotten Gods (13) and Fangs of Asterkarn (19) — for Normal, Elite
   and Ultimate. Tick single waypoints, **Unlock all** of a campaign, unlock everything in the selected difficulty or in
   every difficulty; changes are highlighted and written on **Save**, the undo button puts the save file's lists back.
+- **Factions**: the reputation with every faction, split into allies and enemies (infamy is stored as a negative
+  value). Type a value from -25,000 to 25,000 (Up/Down by one, Shift by 100), pick a rank from the badge (Nemesis …
+  Revered), or set a whole group to its top rank or back to Tolerated; one button sets allies Revered and enemies
+  Nemesis. A changed faction is also unlocked so the game shows it. Devil's Crossing, Aetherials, Chthonians and
+  Cronley's Gang are always listed; the other names come from the game texts, so generate the database to see them.
 
 ## Game database
 

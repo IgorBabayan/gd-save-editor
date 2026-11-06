@@ -67,7 +67,7 @@ static class ServiceCollectionExtensions
             // Notification center (bell in the title bar)
             services.AddSingleton<NotificationCenterViewModel>();
 
-            // Character details (Character / Inventory / Waypoints tabs)
+            // Character details (Character / Inventory / Waypoints / Factions tabs)
             services.AddSingleton<CharacterViewModelFactory>();
 
             // Shell
