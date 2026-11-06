@@ -47,6 +47,15 @@ public sealed record CharacterSave
     public uint? Money { get; init; }
 
     /// <summary>
+    /// Highest difficulty the character may play; <c>null</c> when the character info could not be read or holds a
+    /// value the editor does not know.
+    /// </summary>
+    public GameDifficulty? UnlockedDifficulty { get; init; }
+
+    /// <summary>Crucible tributes; <c>null</c> when the character info could not be read or has none (old saves).</summary>
+    public uint? CrucibleTributes { get; init; }
+
+    /// <summary>
     /// Why the editor cannot write changes into this file (a part of it has a layout the editor does not know);
     /// <c>null</c> when it can.
     /// </summary>

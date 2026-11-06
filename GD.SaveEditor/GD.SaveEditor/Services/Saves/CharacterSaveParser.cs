@@ -32,6 +32,10 @@ public sealed class CharacterSaveParser(IGameTextProvider gameTexts) : ICharacte
             Equipment = file.Equipment,
             Inventory = file.Inventory,
             Money = file.Money,
+            UnlockedDifficulty = file.GreatestDifficulty is { } difficulty && Enum.IsDefined((GameDifficulty)difficulty)
+                ? (GameDifficulty)difficulty
+                : null,
+            CrucibleTributes = file.Tributes,
             DetailsError = file.DetailsError,
             RewriteError = file.RewriteError,
             LastPlayed = new DateTimeOffset(info.LastWriteTimeUtc, TimeSpan.Zero),

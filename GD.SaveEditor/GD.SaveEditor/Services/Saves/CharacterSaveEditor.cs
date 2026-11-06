@@ -6,7 +6,8 @@ namespace GD.SaveEditor.Services.Saves;
 /// <summary>
 /// Writes changes into the bytes of a character file. Every value of a <c>player.gdc</c> moves the encryption key on,
 /// so one changed value changes the encrypted bytes of everything after it: the file is read value by value
-/// (<see cref="CharacterFile"/>), the values are changed (the iron bits) or rebuilt (the bag blocks, when items were moved, added, changed or removed;
+/// (<see cref="CharacterFile"/>), the values are changed (the iron bits; the sex, unlocked difficulty, Crucible tributes,
+/// unspent points and attributes) or rebuilt (the name; the bag blocks, when items were moved, added, changed or removed;
 /// the equipment slots, when items were equipped, changed or taken off) and the whole file is encrypted again (<see cref="GdcWriter"/>). The result is read back before it is returned: it
 /// must hold exactly the values that were meant to be written.
 /// </summary>
@@ -25,12 +26,12 @@ public sealed class CharacterSaveEditor : ICharacterSaveEditor
         var tokens = original.Tokens.ToList();
 
         if (changes.Money is { } money)
-        {
-            var index = original.MoneyOffset is { } offset ? tokens.FindIndex(t => t.Offset == offset) : -1;
-            if (index < 0)
-                throw new InvalidDataException($"The iron bits of {character.CharacterName} could not be found in the save file.");
-            tokens[index] = tokens[index] with { Value = money };
-        }
+            SetValue(tokens, original.MoneyOffset, money, "The iron bits");
+
+        // Values of the header, the character info and the bio block keep their size: only the name (below) changes the
+        // number of values, and it is replaced last.
+        if (changes.Profile is { IsEmpty: false } profile)
+            SetProfileValues(tokens, original, profile);
 
         // The equipment is stored after the bags, so it is replaced first: the bags' indices stay valid. The inventory
         // block that holds both grows or shrinks by what they changed.
@@ -55,9 +56,135 @@ public sealed class CharacterSaveEditor : ICharacterSaveEditor
         if (inventoryLengthToken is { } lengthToken && inventoryEndToken is { } endToken)
             tokens[lengthToken] = tokens[lengthToken] with { Value = SizeOf(tokens, lengthToken + 1, endToken + inventoryDelta) };
 
+        // The name is in the header, before every block: a longer or shorter name moves all the values after it, but no
+        // block length covers it. Done last, since it moves the indices used above.
+        if (changes.Profile?.Name is { } name && name != original.Name)
+            ReplaceName(tokens, original, name);
+
         var data = GdcWriter.EncodeSequence(character.RawData, tokens);
         Verify(tokens, CharacterFile.Read(data, recordTokens: true));
         return data;
+    }
+
+    /// <summary>
+    /// Sets the values of <paramref name="profile"/> that keep their size: the "male" flag of the header, the unlocked
+    /// difficulty and the Crucible tributes of the character info, the unspent points and the attributes of the bio
+    /// block (see <see cref="CharacterFile"/>).
+    /// </summary>
+    private static void SetProfileValues(List<GdcToken> tokens, CharacterFile original, ProfileChanges profile)
+    {
+        if (profile.Name is { } name && CharacterLimits.ValidateName(name) is { } nameError)
+            throw new InvalidDataException(nameError);
+
+        if (profile.IsMale is { } isMale)
+            SetValue(tokens, original.IsMaleOffset, isMale ? 1u : 0u, "The sex of the character");
+
+        if (profile.UnlockedDifficulty is { } unlocked)
+        {
+            if (!Enum.IsDefined(unlocked))
+                throw new InvalidDataException($"Unknown difficulty {(int)unlocked}.");
+            SetValue(tokens, original.GreatestDifficultyOffset, (uint)unlocked, "The unlocked difficulty");
+
+            // The difficulty the character plays (low bits; the game keeps other flags above them) cannot be above the
+            // unlocked one: it is lowered with it, so the game does not load the character into a locked difficulty.
+            var index = Find(tokens, original.DifficultyOffset, "The current difficulty");
+            var current = tokens[index].Value;
+            if ((current & 0x0F) > (uint)unlocked)
+                tokens[index] = tokens[index] with { Value = (current & 0xF0) | (uint)unlocked };
+        }
+
+        if (profile.CrucibleTributes is { } tributes)
+        {
+            if (tributes > CharacterLimits.MaxTributes)
+                throw new InvalidDataException($"The Crucible tributes cannot be more than {CharacterLimits.MaxTributes:N0}.");
+            SetValue(tokens, original.TributesOffset, tributes, "The Crucible tributes");
+        }
+
+        if (!profile.ChangesBio)
+            return;
+
+        // Bio block: level, experience, attribute points, skill points, devotion points, total devotion, physique,
+        // cunning, spirit, health, energy, one value each.
+        var bio = Find(tokens, original.StatsOffset, "The attributes");
+        if (bio + 10 >= tokens.Count)
+            throw new InvalidDataException("The attributes could not be found in the save file.");
+
+        SetPoints(tokens, bio + 2, profile.AttributePoints, CharacterLimits.MaxPoints, "Unspent attribute points");
+        SetPoints(tokens, bio + 3, profile.SkillPoints, CharacterLimits.MaxPoints, "Unspent skill points");
+        SetPoints(tokens, bio + 4, profile.DevotionPoints, CharacterLimits.MaxDevotionPoints, "Unspent devotion points");
+
+        // Base health and energy are stored with the attributes: they move by what the game gives per point.
+        SetAttribute(tokens, bio + 6, profile.Physique, "Physique", bio + 9, CharacterLimits.HealthPerPhysique);
+        SetAttribute(tokens, bio + 7, profile.Cunning, "Cunning");
+        SetAttribute(tokens, bio + 8, profile.Spirit, "Spirit", bio + 10, CharacterLimits.EnergyPerSpirit);
+    }
+
+    private static void SetPoints(List<GdcToken> tokens, int index, int? value, int max, string what)
+    {
+        if (value is not { } points)
+            return;
+        if (points < 0 || points > max)
+            throw new InvalidDataException($"{what} must be from 0 to {max:N0}.");
+        tokens[index] = tokens[index] with { Value = (uint)points };
+    }
+
+    /// <summary>Sets an attribute (a float); the value at <paramref name="derivedIndex"/> moves by <paramref name="perPoint"/> per point.</summary>
+    private static void SetAttribute(
+        List<GdcToken> tokens, int index, int? value, string what, int derivedIndex = -1, float perPoint = 0)
+    {
+        if (value is not { } attribute)
+            return;
+        if (attribute < 0 || attribute > CharacterLimits.MaxAttribute)
+            throw new InvalidDataException($"{what} must be from 0 to {CharacterLimits.MaxAttribute:N0}.");
+
+        var previous = BitConverter.UInt32BitsToSingle(tokens[index].Value);
+        tokens[index] = tokens[index] with { Value = BitConverter.SingleToUInt32Bits(attribute) };
+
+        if (derivedIndex < 0)
+            return;
+        var derived = BitConverter.UInt32BitsToSingle(tokens[derivedIndex].Value) + (attribute - previous) * perPoint;
+        tokens[derivedIndex] = tokens[derivedIndex] with { Value = BitConverter.SingleToUInt32Bits(Math.Max(1f, derived)) };
+    }
+
+    /// <summary>
+    /// Replaces the name of the header: <c>int32 length, length x (2 bytes)</c> (UTF-16, like
+    /// <see cref="GdcReader.ReadWideString"/> reads it).
+    /// </summary>
+    private static void ReplaceName(List<GdcToken> tokens, CharacterFile original, string name)
+    {
+        if (CharacterLimits.ValidateName(name) is { } error)
+            throw new InvalidDataException(error);
+
+        var index = Find(tokens, original.NameOffset, "The name");
+        var length = (int)tokens[index].Value;
+        if (length != original.Name.Length || index + 1 + length * 2 > tokens.Count)
+            throw new InvalidDataException("The name could not be found in the save file.");
+
+        var values = new List<GdcToken>(1 + name.Length * 2);
+        AddUInt32(values, (uint)name.Length);
+        foreach (var c in name)
+        {
+            values.Add(new GdcToken(0, GdcTokenKind.Byte, (uint)(c & 0xFF)));
+            values.Add(new GdcToken(0, GdcTokenKind.Byte, (uint)(c >> 8)));
+        }
+
+        tokens.RemoveRange(index, 1 + length * 2);
+        tokens.InsertRange(index, values);
+    }
+
+    /// <summary>Sets the value read at <paramref name="offset"/> (the tokens before any value was added or removed).</summary>
+    private static void SetValue(List<GdcToken> tokens, int? offset, uint value, string what)
+    {
+        var index = Find(tokens, offset, what);
+        tokens[index] = tokens[index] with { Value = value };
+    }
+
+    /// <summary>Index of the value read at <paramref name="offset"/>.</summary>
+    /// <exception cref="InvalidDataException">That part of the file was not read.</exception>
+    private static int Find(List<GdcToken> tokens, int? offset, string what)
+    {
+        var index = offset is { } value ? tokens.FindIndex(t => t.Offset == value) : -1;
+        return index >= 0 ? index : throw new InvalidDataException($"{what} could not be found in the save file.");
     }
 
     /// <summary>

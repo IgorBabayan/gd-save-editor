@@ -1,4 +1,3 @@
-using System.Globalization;
 using GD.SaveEditor.Presentation.Services;
 using GD.SaveEditor.Presentation.ViewModels.Inventory;
 using GD.SaveEditor.Services.GameData.Database;
@@ -9,13 +8,10 @@ using GD.SaveEditor.Services.Saves.Models;
 
 namespace GD.SaveEditor.Presentation.ViewModels.Characters;
 
-/// <summary>An attribute or counter shown beside the equipment, e.g. "Physique 612".</summary>
-public sealed record CharacterStatLine(string Label, string Value);
-
 /// <summary>
-/// "Character" tab: the equipment screen of the game (armor, jewelry, relic, both weapon sets) with the character's
-/// attributes. A slot's item can be changed or taken off, and an empty slot can get a new item, in the item inspector
-/// (the compact item builder) like a bag item.
+/// "Character" tab: the equipment screen of the game (armor, jewelry, relic, both weapon sets) with the character panel
+/// beside it (<see cref="Profile"/>). A slot's item can be changed or taken off, and an empty slot can get a new item,
+/// in the item inspector (the compact item builder) like a bag item.
 /// </summary>
 public sealed partial class CharacterEquipmentViewModel : ViewModelBase
 {
@@ -26,9 +22,11 @@ public sealed partial class CharacterEquipmentViewModel : ViewModelBase
     /// <summary>The 16 slots in the file's order: armor and jewelry, then weapon set 1 and 2.</summary>
     private readonly List<SlotState> _slots = [];
 
-    public CharacterEquipmentViewModel(CharacterSave character, IGameItemProvider items, IGameIconProvider icons, IDialogService dialogs)
+    public CharacterEquipmentViewModel(
+        CharacterSave character, CharacterProfileViewModel profile, IGameItemProvider items, IGameIconProvider icons, IDialogService dialogs)
     {
         Character = character;
+        Profile = profile;
         _items = items;
         _icons = icons;
         _dialogs = dialogs;
@@ -45,7 +43,6 @@ public sealed partial class CharacterEquipmentViewModel : ViewModelBase
         ActiveWeaponSet = equipment?.ActiveWeaponSet ?? 1;
         ShownWeaponSet = ActiveWeaponSet;
 
-        Stats = BuildStats(character.Stats);
         ErrorText = character.DetailsError is { } error ? $"The equipment could not be read from the save file: {error}" : null;
         ShowDatabaseHint = equipment is { Items.Count: > 0 } && !items.IsDatabaseAvailable;
 
@@ -53,6 +50,9 @@ public sealed partial class CharacterEquipmentViewModel : ViewModelBase
     }
 
     public CharacterSave Character { get; }
+
+    /// <summary>Name, sex, difficulty, tributes, attributes and points, shown beside the equipment.</summary>
+    public CharacterProfileViewModel Profile { get; }
 
     public EquipmentSlotViewModel Head => View(EquipmentSlot.Head);
     public EquipmentSlotViewModel Amulet => View(EquipmentSlot.Amulet);
@@ -86,11 +86,6 @@ public sealed partial class CharacterEquipmentViewModel : ViewModelBase
     /// <summary>"Weapon set I (active)".</summary>
     public string WeaponSetText =>
         $"Weapon set {(ShownWeaponSet == 2 ? "II" : "I")}{(ShownWeaponSet == ActiveWeaponSet ? " (active)" : string.Empty)}";
-
-    /// <summary>Attributes and unspent points; empty when they could not be read.</summary>
-    public IReadOnlyList<CharacterStatLine> Stats { get; }
-
-    public bool HasStats => Stats.Count > 0;
 
     /// <summary>Why the equipment is not shown; <c>null</c> when it was read.</summary>
     public string? ErrorText { get; }
@@ -335,29 +330,5 @@ public sealed partial class CharacterEquipmentViewModel : ViewModelBase
         {
             IsLoading = false;
         }
-    }
-
-    private static IReadOnlyList<CharacterStatLine> BuildStats(CharacterStats? stats)
-    {
-        if (stats is null)
-            return [];
-
-        static string Number(double value) => value.ToString("N0", CultureInfo.CurrentCulture);
-
-        var lines = new List<CharacterStatLine>
-        {
-            new("Physique", Number(stats.Physique)),
-            new("Cunning", Number(stats.Cunning)),
-            new("Spirit", Number(stats.Spirit)),
-            new("Base health", Number(stats.Health)),
-            new("Base energy", Number(stats.Energy)),
-            new("Experience", Number(stats.Experience)),
-            new("Devotion earned", Number(stats.TotalDevotion))
-        };
-
-        if (stats.AttributePoints > 0) lines.Add(new("Unspent attribute points", Number(stats.AttributePoints)));
-        if (stats.SkillPoints > 0) lines.Add(new("Unspent skill points", Number(stats.SkillPoints)));
-        if (stats.DevotionPoints > 0) lines.Add(new("Unspent devotion points", Number(stats.DevotionPoints)));
-        return lines;
     }
 }

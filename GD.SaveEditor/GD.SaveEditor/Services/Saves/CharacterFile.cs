@@ -74,6 +74,33 @@ public sealed class CharacterFile
     /// <summary>File offset of the iron bits value, to change it (see <see cref="GdcWriter"/>).</summary>
     public int? MoneyOffset { get; private set; }
 
+    /// <summary>File offset of the name's length; the name's characters follow it, two bytes each.</summary>
+    public int NameOffset { get; private set; }
+
+    /// <summary>File offset of the "male" flag of the header.</summary>
+    public int IsMaleOffset { get; private set; }
+
+    /// <summary>Difficulty the character plays (character info); <c>null</c> when block 1 could not be read.</summary>
+    public byte? Difficulty { get; private set; }
+
+    public int? DifficultyOffset { get; private set; }
+
+    /// <summary>Highest difficulty unlocked (character info); <c>null</c> when block 1 could not be read.</summary>
+    public byte? GreatestDifficulty { get; private set; }
+
+    public int? GreatestDifficultyOffset { get; private set; }
+
+    /// <summary>Crucible tributes (character info version 4+); <c>null</c> when block 1 could not be read or has none.</summary>
+    public uint? Tributes { get; private set; }
+
+    public int? TributesOffset { get; private set; }
+
+    /// <summary>
+    /// File offset of the level in the bio block, the first of its 11 values (see <see cref="ReadBio"/>);
+    /// <c>null</c> when the block could not be read.
+    /// </summary>
+    public int? StatsOffset { get; private set; }
+
     /// <summary>Why stats, equipment or bags could not be read; <c>null</c> when they were.</summary>
     public string? DetailsError { get; private set; }
 
@@ -122,14 +149,13 @@ public sealed class CharacterFile
         if (version < 1)
             throw new InvalidDataException($"Unsupported character file version {version}.");
 
-        var file = new CharacterFile
-        {
-            Name = reader.ReadWideString(),
-            IsMale = reader.ReadBool(),
-            ClassTag = reader.ReadString(),
-            Level = reader.ReadInt32(),
-            Hardcore = reader.ReadBool()
-        };
+        var file = new CharacterFile { NameOffset = reader.Position };
+        file.Name = reader.ReadWideString();
+        file.IsMaleOffset = reader.Position;
+        file.IsMale = reader.ReadBool();
+        file.ClassTag = reader.ReadString();
+        file.Level = reader.ReadInt32();
+        file.Hardcore = reader.ReadBool();
         file.ExpansionStatus = version >= 2 ? reader.ReadByte() : (byte)0;
 
         try
@@ -309,14 +335,19 @@ public sealed class CharacterFile
 
         reader.ReadBool();
         reader.ReadBool();
-        reader.ReadByte();
-        reader.ReadByte();
+        var difficultyOffset = reader.Position;
+        var difficulty = reader.ReadByte();
+        var greatestOffset = reader.Position;
+        var greatest = reader.ReadByte();
         var moneyOffset = reader.Position;
         var money = reader.ReadUInt32();
+        int? tributesOffset = null;
+        uint? tributes = null;
         if (version >= 4)
         {
             reader.ReadByte();
-            reader.ReadUInt32();
+            tributesOffset = reader.Position;
+            tributes = reader.ReadUInt32();
         }
 
         reader.ReadByte();
@@ -335,6 +366,9 @@ public sealed class CharacterFile
             throw new InvalidDataException("Character info block has an unknown layout.");
 
         (MoneyOffset, Money) = (moneyOffset, money);
+        (DifficultyOffset, Difficulty) = (difficultyOffset, difficulty);
+        (GreatestDifficultyOffset, GreatestDifficulty) = (greatestOffset, greatest);
+        (TributesOffset, Tributes) = (tributesOffset, tributes);
     }
 
     /// <summary>
@@ -346,6 +380,7 @@ public sealed class CharacterFile
     private void ReadBio(GdcReader reader, int end)
     {
         reader.ReadInt32(); // version
+        var statsOffset = reader.Position;
         var stats = new CharacterStats(
             Level: reader.ReadInt32(),
             Experience: reader.ReadUInt32(),
@@ -360,7 +395,7 @@ public sealed class CharacterFile
             Energy: reader.ReadSingle());
 
         if (reader.Position == end)
-            Stats = stats;
+            (Stats, StatsOffset) = (stats, statsOffset);
     }
 
     #endregion

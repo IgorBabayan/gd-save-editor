@@ -25,7 +25,8 @@ public sealed partial class CharacterViewModel : ViewModelBase
     {
         _saveEditor = saveEditor;
         Character = character;
-        Equipment = new CharacterEquipmentViewModel(character, items, icons, dialogs);
+        Profile = new CharacterProfileViewModel(character);
+        Equipment = new CharacterEquipmentViewModel(character, Profile, items, icons, dialogs);
         Inventory = new InventoryViewModel(character, items, icons, dialogs);
         Waypoints = new WaypointsViewModel(character);
 
@@ -39,6 +40,11 @@ public sealed partial class CharacterViewModel : ViewModelBase
             if (e.PropertyName == nameof(CharacterEquipmentViewModel.HasChanges))
                 RefreshHasUnsavedChanges();
         };
+        Profile.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(CharacterProfileViewModel.HasChanges))
+                RefreshHasUnsavedChanges();
+        };
 
         RefreshHasUnsavedChanges();
     }
@@ -47,6 +53,9 @@ public sealed partial class CharacterViewModel : ViewModelBase
 
     /// <summary>"Character" tab: equipment (which can be changed) and attributes.</summary>
     public CharacterEquipmentViewModel Equipment { get; }
+
+    /// <summary>Name, sex, difficulty, tributes, attributes and points, beside the equipment in the "Character" tab.</summary>
+    public CharacterProfileViewModel Profile { get; }
 
     /// <summary>Bags and iron bits, shown under the equipment in the "Character" tab.</summary>
     public InventoryViewModel Inventory { get; }
@@ -59,15 +68,17 @@ public sealed partial class CharacterViewModel : ViewModelBase
     private bool _hasUnsavedChanges;
 
     /// <summary>
-    /// The bytes to write into <c>player.gdc</c>: the file as read with the changes made in the tabs (the iron bits,
-    /// the items moved, added, changed or removed in the bags, and the items equipped, changed or taken off).
+    /// The bytes to write into <c>player.gdc</c>: the file as read with the changes made in the tabs (the character
+    /// panel, the iron bits, the items moved, added, changed or removed in the bags, and the items equipped, changed or
+    /// taken off).
     /// </summary>
     /// <exception cref="System.IO.InvalidDataException">The changes cannot be written into this file.</exception>
     public byte[] GetSaveData() =>
         _saveEditor.Apply(Character, new CharacterChanges(
-            Money: Inventory.ChangedMoney, Bags: Inventory.ChangedBags, Equipment: Equipment.ChangedEquipment));
+            Money: Inventory.ChangedMoney, Bags: Inventory.ChangedBags, Equipment: Equipment.ChangedEquipment,
+            Profile: Profile.Changes));
 
     /// <summary>Call when a tab changed something, so the Save button follows the actual difference to the file.</summary>
     public void RefreshHasUnsavedChanges() =>
-        HasUnsavedChanges = Equipment.HasChanges || Inventory.HasChanges || Waypoints.HasChanges;
+        HasUnsavedChanges = Profile.HasChanges || Equipment.HasChanges || Inventory.HasChanges || Waypoints.HasChanges;
 }

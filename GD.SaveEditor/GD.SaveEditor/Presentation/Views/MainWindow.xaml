@@ -12,7 +12,7 @@
         xmlns:characterViews="clr-namespace:GD.SaveEditor.Presentation.Views.Characters"
         mc:Ignorable="d"
         d:DataContext="{d:DesignInstance Type=shellVm:MainViewModel, IsDesignTimeCreatable=False}"
-        Title="Grim Dawn Save Editor" Height="940" Width="1150"
+        Title="Grim Dawn Save Editor"
         WindowStartupLocation="CenterScreen"
         ResizeMode="NoResize"
         Background="{DynamicResource WindowBackgroundBrush}"

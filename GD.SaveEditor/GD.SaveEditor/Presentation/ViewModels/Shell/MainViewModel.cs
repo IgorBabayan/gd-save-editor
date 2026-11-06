@@ -237,8 +237,9 @@ public partial class MainViewModel(
             var result = await characterSaveWriter.SaveAsync(character, details.GetSaveData());
             ReplaceCharacter(character, result.Character);
 
+            // The name may have been changed: the toast names the character as it was written.
             toastService.Show(
-                $"{character.CharacterName} saved. The previous file was kept as {Path.GetFileName(result.BackupPath)}.",
+                $"{result.Character.CharacterName} saved. The previous file was kept as {Path.GetFileName(result.BackupPath)}.",
                 NotificationSeverity.Success);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)

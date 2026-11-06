@@ -17,6 +17,10 @@
 - **Automatic updates** for copies installed with the installer: on start the editor checks the latest GitHub release, downloads and verifies the new installer (progress shown as a toast, can be cancelled), counts down and restarts into the new version. Turn it off, change the countdown or update manually in **Settings → Updates** (*Check for updates* / *Download and update*). Unpacked or development builds are never updated.
 - Character list (a quarter of the window) split into **Softcore** and **Hardcore** tabs, each with a **Show only SSF characters** filter.
 - Character details with **Inventory** and **Waypoints** tabs (not implemented yet).
+- **Character panel** (beside the equipment): name, sex, unlocked difficulty (Normal / Elite / Ultimate), Crucible
+  tributes, physique, cunning, spirit, and unspent attribute, skill and devotion points (at most 55). Changed values are
+  highlighted and written on **Save**; base health and energy follow physique and spirit like in the game; Esc or the
+  undo buttons put back the values of the save file.
 - **Bags**: items can be dragged to another cell or bag, and added, changed or removed with the **item builder**:
   - right-click a free cell → *Build a new item* → pick a kind (helm, weapon, ring, relic, component, …): the builder lists only that kind and the item goes to that cell; or the **+** button in the bag header (any item, first free cell);
   - click an item to open it in the item inspector beside it (expand for the full builder), or right-click it → *Change…* / *Remove*;

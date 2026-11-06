@@ -4,6 +4,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:charactersVm="clr-namespace:GD.SaveEditor.Presentation.ViewModels.Characters"
+             xmlns:local="clr-namespace:GD.SaveEditor.Presentation.Views.Characters"
              xmlns:wpf="clr-namespace:Material.Icons.WPF;assembly=Material.Icons.WPF"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=charactersVm:CharacterEquipmentViewModel, IsDesignTimeCreatable=False}"
@@ -218,7 +219,7 @@
                                                   HorizontalAlignment="Center"
                                                   VerticalAlignment="Center" />
                                 <StackPanel VerticalAlignment="Center" Margin="12">
-                                    <TextBlock Text="{Binding Character.CharacterName}"
+                                    <TextBlock Text="{Binding Profile.NameText}"
                                                FontSize="20"
                                                FontWeight="SemiBold"
                                                TextAlignment="Center"
@@ -280,32 +281,8 @@
                 </Grid>
             </Border>
 
-            <!-- ===== Attributes ===== -->
-            <Border MinWidth="260"
-                    MinHeight="0"
-                    Margin="0,0,0,16"
-                    Padding="16,12"
-                    VerticalAlignment="Top"
-                    Style="{StaticResource InventorySectionBorderStyle}"
-                    Visibility="{Binding HasStats, Converter={StaticResource BooleanToVisibilityConverter}}">
-                <StackPanel>
-                    <TextBlock Text="Attributes" Style="{StaticResource SectionHeaderTextStyle}" Margin="0,0,0,8" />
-                    <ItemsControl ItemsSource="{Binding Stats}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate DataType="{x:Type charactersVm:CharacterStatLine}">
-                                <Grid Margin="0,3">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="{Binding Label}" Margin="0,0,24,0" Foreground="{DynamicResource SecondaryForegroundBrush}" />
-                                    <TextBlock Grid.Column="1" Text="{Binding Value}" FontWeight="SemiBold" Foreground="{DynamicResource WindowForegroundBrush}" />
-                                </Grid>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </StackPanel>
-            </Border>
+            <!-- ===== Character: name, sex, difficulty, tributes, attributes and points ===== -->
+            <local:CharacterProfileView Margin="0,0,0,16" VerticalAlignment="Top" DataContext="{Binding Profile}" />
         </WrapPanel>
 
         <!-- What the last change could not do (an item that does not fit the slot). -->
