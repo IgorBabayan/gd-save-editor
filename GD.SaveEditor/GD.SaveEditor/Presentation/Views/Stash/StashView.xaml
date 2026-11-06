@@ -10,9 +10,10 @@
              d:DesignHeight="800" d:DesignWidth="900">
 
     <!--
-        "Stash" tab: the personal stash (tabs 1 to 8; the ones not bought in the game are locked) and the shared stash
-        of every character of the same mode, side by side when there is room. Items can be moved inside each stash;
-        changes are written on Save (the shared stash into transfer.gst / transfer.gsh).
+        "Stash" tab: the personal stash (tabs 1 to 8; the ones not bought in the game are locked), the shared stash and
+        the Smuggler's material storage of every character of the same mode, side by side when there is room. Items can
+        be moved inside each stash and amounts of materials changed; changes are written on Save (the shared stash into
+        transfer.gst / transfer.gsh, the materials into reagents.gst / reagents.gsh).
     -->
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
         <WrapPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,8,0,0">
@@ -20,6 +21,11 @@
             <!-- The border keeps this tab's data context, so the stash card is hidden while there is no shared stash. -->
             <Border Visibility="{Binding HasTransfer, Converter={StaticResource BooleanToVisibilityConverter}}">
                 <local:StashGroupView DataContext="{Binding Transfer}" />
+            </Border>
+
+            <!-- The Smuggler's Components and Crafting materials pages (game version 1.3+), shared like the stash. -->
+            <Border Visibility="{Binding HasMaterials, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <local:MaterialStorageView DataContext="{Binding Materials}" />
             </Border>
         </WrapPanel>
     </ScrollViewer>

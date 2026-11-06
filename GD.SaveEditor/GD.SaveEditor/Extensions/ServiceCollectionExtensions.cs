@@ -44,6 +44,8 @@ static class ServiceCollectionExtensions
             services.AddSingleton<ICharacterSaveEditor, CharacterSaveEditor>();
             // Shared stash (transfer.gst / transfer.gsh)
             services.AddSingleton<ITransferStashService, TransferStashService>();
+            // Material storage of the Smuggler (reagents.gst / reagents.gsh)
+            services.AddSingleton<IMaterialStorageService, MaterialStorageService>();
 
             // Game data (%APPDATA%\GD.SaveEditor\database.db) built from the game's .arz / .arc files
             services.AddSingleton<IGameFileProvider, GameFileProvider>();

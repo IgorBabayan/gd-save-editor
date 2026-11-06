@@ -27,7 +27,8 @@ public sealed partial class CharacterViewModel : ViewModelBase
         IDialogService dialogs,
         IGameWaypointProvider waypoints,
         IGameTextProvider texts,
-        TransferStashViewModel? transferStash)
+        TransferStashViewModel? transferStash,
+        MaterialStorageViewModel? materialStorage)
     {
         _saveEditor = saveEditor;
         Character = character;
@@ -36,7 +37,7 @@ public sealed partial class CharacterViewModel : ViewModelBase
         Inventory = new InventoryViewModel(character, items, icons, dialogs);
         Waypoints = new WaypointsViewModel(character, waypoints);
         Factions = new FactionsViewModel(character, texts);
-        Stash = new StashViewModel(new PersonalStashViewModel(character, items, icons, dialogs), transferStash);
+        Stash = new StashViewModel(new PersonalStashViewModel(character, items, icons, dialogs), transferStash, materialStorage);
 
         Inventory.PropertyChanged += (_, e) =>
         {
@@ -63,7 +64,7 @@ public sealed partial class CharacterViewModel : ViewModelBase
             if (e.PropertyName == nameof(FactionsViewModel.HasChanges))
                 RefreshHasUnsavedChanges();
         };
-        // The shared stash is not part of player.gdc: the main window follows its changes itself.
+        // The shared stash and the material storage are not part of player.gdc: the main window follows their changes itself.
         Stash.Personal.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(PersonalStashViewModel.HasChanges))
@@ -90,7 +91,7 @@ public sealed partial class CharacterViewModel : ViewModelBase
     /// <summary>"Factions" tab.</summary>
     public FactionsViewModel Factions { get; }
 
-    /// <summary>"Stash" tab: personal stash tabs 1 to 8 and the shared stash of the character's mode.</summary>
+    /// <summary>"Stash" tab: personal stash tabs 1 to 8, the shared stash and the material storage of the character's mode.</summary>
     public StashViewModel Stash { get; }
 
     /// <summary>Something was changed that is not written to the save file yet.</summary>

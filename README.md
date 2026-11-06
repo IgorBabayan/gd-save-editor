@@ -35,6 +35,11 @@
   built, changed and removed like in the bags; each stash has its own undo button. **Save** writes the personal stash
   into `player.gdc` and, when it was changed, the shared stash into its own file (kept as `transfer.gst.<date>.bak`).
   The shared stash is the same for every character of a mode, so its changes stay while another character is selected.
+- **Material storage** (game version 1.3+, in the **Stash** tab): the Smuggler's shared **Components** and **Crafting
+  materials** pages, kept in `reagents.gst` / `reagents.gsh` next to the shared stash. Every material shows its icon,
+  the game's tooltip and the amount stored, which can be typed (0 to 999,999; Up/Down by one, Shift by 100). Materials
+  you have none of are listed too (from the game database), faded, so they can be added. A search box filters both
+  pages; changed amounts are highlighted and written on **Save** (the previous file kept as `reagents.gst.<date>.bak`).
 - **Waypoints** (needs the game database built with the game folder set): the rift gates of every campaign — base
   campaign (Acts 1–3, 30), Ashes of Malmouth (10), Forgotten Gods (13) and Fangs of Asterkarn (19) — for Normal, Elite
   and Ultimate. Tick single waypoints, **Unlock all** of a campaign, unlock everything in the selected difficulty or in

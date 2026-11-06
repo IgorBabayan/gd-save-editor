@@ -22,7 +22,8 @@ public partial class MainViewModel(
     IToastService toastService,
     NotificationCenterViewModel notificationCenter,
     CharacterViewModelFactory characterViewModelFactory,
-    ITransferStashService transferStashService) : ViewModelBase
+    ITransferStashService transferStashService,
+    IMaterialStorageService materialStorageService) : ViewModelBase
 {
     private const int SoftcoreTabIndex = 0;
     private const int HardcoreTabIndex = 1;
@@ -54,8 +55,18 @@ public partial class MainViewModel(
 
     private TransferStashViewModel? TransferFor(bool hardcore) => hardcore ? _hardcoreTransfer : _softcoreTransfer;
 
-    private IEnumerable<TransferStashViewModel> Transfers =>
-        new[] { _softcoreTransfer, _hardcoreTransfer }.OfType<TransferStashViewModel>();
+    /// <summary>The Smuggler's material storage of each mode (<c>reagents.gst</c>, <c>reagents.gsh</c>), shared like the stash.</summary>
+    private MaterialStorageViewModel? _softcoreMaterials;
+
+    private MaterialStorageViewModel? _hardcoreMaterials;
+
+    private MaterialStorageViewModel? MaterialsFor(bool hardcore) => hardcore ? _hardcoreMaterials : _softcoreMaterials;
+
+    /// <summary>The shared files of <paramref name="hardcore"/> characters (both modes when <c>null</c>) the editor has read.</summary>
+    private IEnumerable<ISharedStashFileViewModel> SharedFiles(bool? hardcore = null) =>
+        new ISharedStashFileViewModel?[] { _softcoreTransfer, _softcoreMaterials, _hardcoreTransfer, _hardcoreMaterials }
+            .OfType<ISharedStashFileViewModel>()
+            .Where(f => hardcore is not { } mode || f.Hardcore == mode);
 
     /// <summary>Bell button and notification popup in the title bar.</summary>
     public NotificationCenterViewModel NotificationCenter { get; } = notificationCenter;
@@ -108,7 +119,7 @@ public partial class MainViewModel(
     private bool _isSaving;
 
     /// <summary>Some opened character or a shared stash has changes that are not saved yet.</summary>
-    public bool HasUnsavedChanges => _openedCharacters.Values.Any(c => c.HasUnsavedChanges) || Transfers.Any(t => t.HasChanges);
+    public bool HasUnsavedChanges => _openedCharacters.Values.Any(c => c.HasUnsavedChanges) || SharedFiles().Any(f => f.HasChanges);
 
     public bool HasSaveFolder => IsExistingFolder(settingsService.Current.SaveFolderPath);
     public bool ShowNoSaveFolder => !HasSaveFolder;
@@ -189,7 +200,7 @@ public partial class MainViewModel(
         if (_openedCharacters.TryGetValue(character.FilePath, out var opened) && ReferenceEquals(opened.Character, character))
             return opened;
 
-        var details = characterViewModelFactory.Create(character, TransferFor(character.Hardcore));
+        var details = characterViewModelFactory.Create(character, TransferFor(character.Hardcore), MaterialsFor(character.Hardcore));
         details.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName != nameof(CharacterViewModel.HasUnsavedChanges))
@@ -217,16 +228,16 @@ public partial class MainViewModel(
 
     /// <summary>
     /// Asks before something would throw away unsaved changes of <paramref name="characters"/> and
-    /// <paramref name="transfers"/> (every opened character and both shared stashes when <c>null</c>); <c>true</c> when
+    /// <paramref name="sharedFiles"/> (every opened character and every shared file when <c>null</c>); <c>true</c> when
     /// it may go ahead.
     /// </summary>
     private bool ConfirmDiscardChanges(
-        string action, IEnumerable<CharacterViewModel>? characters = null, IEnumerable<TransferStashViewModel>? transfers = null)
+        string action, IEnumerable<CharacterViewModel>? characters = null, IEnumerable<ISharedStashFileViewModel>? sharedFiles = null)
     {
         var names = (characters ?? _openedCharacters.Values)
             .Where(c => c.HasUnsavedChanges)
             .Select(c => c.Character.CharacterName)
-            .Concat((transfers ?? Transfers).Where(t => t.HasChanges).Select(t => t.Title))
+            .Concat((sharedFiles ?? SharedFiles()).Where(f => f.HasChanges).Select(f => f.Title))
             .ToList();
         if (names.Count == 0)
             return true;
@@ -241,12 +252,13 @@ public partial class MainViewModel(
 
     private bool CanSave() =>
         !IsSaving && !IsLoading && CharacterDetails is { } details
-        && (details.HasUnsavedChanges || TransferFor(details.Character.Hardcore)?.HasChanges == true);
+        && (details.HasUnsavedChanges || SharedFiles(details.Character.Hardcore).Any(f => f.HasChanges));
 
     /// <summary>
-    /// Title bar save button (Ctrl+S): writes the selected character into its <c>player.gdc</c>, and the shared stash of
-    /// its mode into <c>transfer.gst</c> / <c>transfer.gsh</c> when it was changed. The previous files are kept as
-    /// backups, and both are read back from the written files, so what is shown is what the game loads.
+    /// Title bar save button (Ctrl+S): writes the selected character into its <c>player.gdc</c>, the shared stash of its
+    /// mode into <c>transfer.gst</c> / <c>transfer.gsh</c> and its material storage into <c>reagents.gst</c> /
+    /// <c>reagents.gsh</c> when they were changed. The previous files are kept as backups, and everything is read back
+    /// from the written files, so what is shown is what the game loads.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanSave))]
     private async Task SaveAsync()
@@ -259,6 +271,9 @@ public partial class MainViewModel(
         try
         {
             if (TransferFor(character.Hardcore) is { HasChanges: true } transfer && !await SaveTransferAsync(transfer))
+                return;
+
+            if (MaterialsFor(character.Hardcore) is { HasChanges: true } materials && !await SaveMaterialsAsync(materials))
                 return;
 
             if (!details.HasUnsavedChanges)
@@ -309,6 +324,83 @@ public partial class MainViewModel(
             toastService.Show($"{transfer.Title} could not be saved. See the notifications for details.", NotificationSeverity.Error);
             return false;
         }
+    }
+
+    /// <summary>
+    /// Writes the changed material storage into its file (keeping a backup) and shows it as read back; <c>false</c> when
+    /// it could not be written (the reason goes to the notifications).
+    /// </summary>
+    private async Task<bool> SaveMaterialsAsync(MaterialStorageViewModel materials)
+    {
+        if (materials.Storage is not { } storage)
+            return true;
+
+        try
+        {
+            if (materials.HasErrors)
+                throw new InvalidDataException(
+                    $"Some amounts are not whole numbers from 0 to {MaterialStorage.MaxAmount:N0}. Fix them (they are marked red) and save again.");
+            if (materials.ChangedAmounts is not { } amounts)
+                return true;
+
+            var result = await materialStorageService.SaveAsync(storage, materialStorageService.Apply(storage, amounts));
+            SetMaterials(characterViewModelFactory.CreateMaterialStorage(
+                new MaterialStorageLoad(storage.Hardcore, result.Storage.FilePath, result.Storage, null)));
+            toastService.Show(
+                $"{materials.Title} saved. The previous file was kept as {Path.GetFileName(result.BackupPath)}.",
+                NotificationSeverity.Success);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            notificationService.Notify($"{materials.Title} could not be saved", ex.Message, NotificationSeverity.Error);
+            toastService.Show($"{materials.Title} could not be saved. See the notifications for details.", NotificationSeverity.Error);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Reads the material storage of both modes (or of one) again. A missing file is normal before game version 1.3
+    /// and is only shown in the Stash tab; a file that cannot be read is also reported in the notifications.
+    /// </summary>
+    private async Task LoadMaterialStoragesAsync(string folder, bool? onlyHardcore = null, CancellationToken cancellationToken = default)
+    {
+        foreach (var hardcore in new[] { false, true })
+        {
+            if (onlyHardcore is { } only && only != hardcore)
+                continue;
+
+            var load = await materialStorageService.LoadAsync(folder, hardcore, cancellationToken);
+            if (load.Storage is null && load.FilePath is { } path && File.Exists(path))
+                notificationService.Notify(
+                    $"The material storage ({(hardcore ? "hardcore" : "softcore")}) could not be read", $"{path}: {load.Error}",
+                    NotificationSeverity.Warning);
+            SetMaterials(characterViewModelFactory.CreateMaterialStorage(load));
+        }
+    }
+
+    /// <summary>Shows <paramref name="materials"/> as the material storage of its mode in every opened character.</summary>
+    private void SetMaterials(MaterialStorageViewModel materials)
+    {
+        materials.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName != nameof(MaterialStorageViewModel.HasChanges))
+                return;
+
+            OnPropertyChanged(nameof(HasUnsavedChanges));
+            SaveCommand.NotifyCanExecuteChanged();
+        };
+
+        if (materials.Hardcore)
+            _hardcoreMaterials = materials;
+        else
+            _softcoreMaterials = materials;
+
+        foreach (var details in _openedCharacters.Values.Where(d => d.Character.Hardcore == materials.Hardcore))
+            details.Stash.Materials = materials;
+
+        OnPropertyChanged(nameof(HasUnsavedChanges));
+        SaveCommand.NotifyCanExecuteChanged();
     }
 
     /// <summary>
@@ -454,8 +546,7 @@ public partial class MainViewModel(
         }
 
         CharacterViewModel[] opened = _openedCharacters.TryGetValue(character.FilePath, out var details) ? [details] : [];
-        TransferStashViewModel[] transfers = TransferFor(character.Hardcore) is { } transfer ? [transfer] : [];
-        if (!ConfirmDiscardChanges($"Reload {character.CharacterName}", opened, transfers))
+        if (!ConfirmDiscardChanges($"Reload {character.CharacterName}", opened, SharedFiles(character.Hardcore).ToList()))
             return;
 
         IsLoading = true;
@@ -463,7 +554,9 @@ public partial class MainViewModel(
         {
             var reloaded = await saveFolderLoader.LoadCharacterAsync(character.FilePath);
             // The shared stash may have been written by the game as well; read it before the details are made again.
-            await LoadTransferStashesAsync(settingsService.Current.SaveFolderPath ?? string.Empty, character.Hardcore);
+            var folder = settingsService.Current.SaveFolderPath ?? string.Empty;
+            await LoadTransferStashesAsync(folder, character.Hardcore);
+            await LoadMaterialStoragesAsync(folder, character.Hardcore);
             ReplaceCharacter(character, reloaded);
 
             // A hardcore character that died, or a changed mode, moves it to the other tab: follow it.
@@ -511,6 +604,7 @@ public partial class MainViewModel(
             ForgetClosedCharacters();
             Replace(LoadErrors, content.Errors);
             await LoadTransferStashesAsync(folder, cancellationToken: cts.Token);
+            await LoadMaterialStoragesAsync(folder, cancellationToken: cts.Token);
             if (cts.IsCancellationRequested)
                 return false;
 

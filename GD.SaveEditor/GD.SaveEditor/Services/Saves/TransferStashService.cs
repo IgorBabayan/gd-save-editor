@@ -40,18 +40,12 @@ public sealed class TransferStashService : ITransferStashService
         string? saveFolder, bool hardcore, int? extraFieldsHint, CancellationToken cancellationToken = default) =>
         Task.Run(() =>
         {
-            if (string.IsNullOrWhiteSpace(saveFolder))
-                return new TransferStashLoad(hardcore, null, null, "No save folder is set.");
-
             var fileName = hardcore ? HardcoreFileName : SoftcoreFileName;
-            var folder = Path.GetFullPath(saveFolder);
-            var candidates = new[] { Path.GetDirectoryName(folder), folder }
-                .Where(f => !string.IsNullOrEmpty(f))
-                .Select(f => Path.Combine(f!, fileName))
-                .ToList();
-
-            if (candidates.FirstOrDefault(File.Exists) is not { } path)
-                return new TransferStashLoad(hardcore, candidates[0], null,
+            var (path, exists) = SharedSaveFiles.Find(saveFolder, fileName);
+            if (path is null)
+                return new TransferStashLoad(hardcore, null, null, "No save folder is set.");
+            if (!exists)
+                return new TransferStashLoad(hardcore, path, null,
                     $"{fileName} was not found next to the save folder. The game makes it once the shared stash is opened.");
 
             cancellationToken.ThrowIfCancellationRequested();
@@ -89,23 +83,9 @@ public sealed class TransferStashService : ITransferStashService
     public Task<TransferStashSaveResult> SaveAsync(TransferStash stash, byte[] data, CancellationToken cancellationToken = default) =>
         Task.Run(() =>
         {
-            var info = new FileInfo(stash.FilePath);
-            if (!info.Exists || info.Length != stash.FileLength || info.LastWriteTimeUtc != stash.FileLastWriteUtc)
-                throw new SaveFileChangedException(
-                    $"{info.Name} was changed after it was read (was the game running?). Reload it first.");
-
             cancellationToken.ThrowIfCancellationRequested();
-
-            // transfer.gst.20261106-091500.bak next to the file; the game ignores it.
-            var backupPath = $"{info.FullName}.{DateTime.Now:yyyyMMdd-HHmmss}.bak";
-            File.Copy(info.FullName, backupPath, overwrite: false);
-
-            // Write a temp file first so a crash mid-write never leaves a broken stash.
-            var tempPath = info.FullName + ".tmp";
-            File.WriteAllBytes(tempPath, data);
-            File.Move(tempPath, info.FullName, overwrite: true);
-
-            return new TransferStashSaveResult(Read(info.FullName, stash.Hardcore, stash.ItemExtraFields), backupPath);
+            var backupPath = SharedSaveFiles.WriteWithBackup(stash.FilePath, stash.FileLength, stash.FileLastWriteUtc, data);
+            return new TransferStashSaveResult(Read(stash.FilePath, stash.Hardcore, stash.ItemExtraFields), backupPath);
         }, cancellationToken);
 
     private static TransferStash Read(string path, bool hardcore, int? extraFieldsHint)

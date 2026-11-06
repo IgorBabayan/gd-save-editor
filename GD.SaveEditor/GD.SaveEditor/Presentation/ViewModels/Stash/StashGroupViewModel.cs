@@ -121,7 +121,7 @@ public sealed class PersonalStashViewModel : StashGroupViewModel
 /// The shared stash of every softcore (or every hardcore) character, read from <c>transfer.gst</c> /
 /// <c>transfer.gsh</c>. It is written to its own file when the character is saved.
 /// </summary>
-public sealed class TransferStashViewModel : StashGroupViewModel
+public sealed class TransferStashViewModel : StashGroupViewModel, ISharedStashFileViewModel
 {
     public TransferStashViewModel(TransferStashLoad load, IGameItemProvider items, IGameIconProvider icons, IDialogService dialogs)
         : base(items, icons, dialogs)
