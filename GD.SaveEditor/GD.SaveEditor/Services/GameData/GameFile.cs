@@ -10,14 +10,20 @@ public enum GameFileKind
     Text,
 
     /// <summary>.arc archive of resources (item icons, ...); only indexed.</summary>
-    Resources
+    Resources,
+
+    /// <summary>.arc archive of the game world (<c>Levels.arc</c>); only its rift gates (waypoints) are read.</summary>
+    Levels
 }
 
 /// <summary>A file of the Grim Dawn installation the database is built from.</summary>
 /// <param name="RelativePath">Path in the game folder and on GrimTools, with forward slashes.</param>
 /// <param name="Description">What the file holds, shown in the progress dialog.</param>
 /// <param name="IsRequired">Without it the database cannot be built; optional files (expansions) only warn.</param>
-public sealed record GameFile(string RelativePath, string Description, GameFileKind Kind, bool IsRequired)
+/// <param name="GameFolderOnly">
+/// Read from the Grim Dawn installation only, never downloaded (the level archives are far too large for that).
+/// </param>
+public sealed record GameFile(string RelativePath, string Description, GameFileKind Kind, bool IsRequired, bool GameFolderOnly = false)
 {
     /// <summary>File name, e.g. <c>GDX1.arz</c>; also the <c>source</c> of the rows read from it.</summary>
     public string FileName => RelativePath[(RelativePath.LastIndexOf('/') + 1)..];
@@ -37,6 +43,12 @@ public sealed record GameFile(string RelativePath, string Description, GameFileK
         new("gdx1/resources/Text_EN.arc", "Ashes of Malmouth texts", GameFileKind.Text, IsRequired: false),
         new("gdx2/resources/Text_EN.arc", "Forgotten Gods texts", GameFileKind.Text, IsRequired: false),
         new("gdx3/resources/Text_EN.arc", "Fangs of Asterkarn texts", GameFileKind.Text, IsRequired: false),
-        new("resources/Items.arc", "Item icons and other item resources", GameFileKind.Resources, IsRequired: false)
+        new("resources/Items.arc", "Item icons and other item resources", GameFileKind.Resources, IsRequired: false),
+        // The world map of every campaign: the rift gates (waypoints) and their ids. Each expansion ships the whole world
+        // again, so a gate belongs to the first of these archives it appears in (see GameWaypointCampaign).
+        new("resources/Levels.arc", "Base campaign waypoints", GameFileKind.Levels, IsRequired: false, GameFolderOnly: true),
+        new("gdx1/resources/Levels.arc", "Ashes of Malmouth waypoints", GameFileKind.Levels, IsRequired: false, GameFolderOnly: true),
+        new("gdx2/resources/Levels.arc", "Forgotten Gods waypoints", GameFileKind.Levels, IsRequired: false, GameFolderOnly: true),
+        new("gdx3/resources/Levels.arc", "Fangs of Asterkarn waypoints", GameFileKind.Levels, IsRequired: false, GameFolderOnly: true)
     ];
 }

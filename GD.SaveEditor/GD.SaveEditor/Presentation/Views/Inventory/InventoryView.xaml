@@ -1,4 +1,4 @@
-<UserControl x:Class="GD.SaveEditor.Presentation.Views.Inventory.InventoryView"
+<local:ItemGridView x:Class="GD.SaveEditor.Presentation.Views.Inventory.InventoryView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -6,6 +6,7 @@
              xmlns:inventoryVm="clr-namespace:GD.SaveEditor.Presentation.ViewModels.Inventory"
              xmlns:charactersVm="clr-namespace:GD.SaveEditor.Presentation.ViewModels.Characters"
              xmlns:wpf="clr-namespace:Material.Icons.WPF;assembly=Material.Icons.WPF"
+             xmlns:local="clr-namespace:GD.SaveEditor.Presentation.Views.Inventory"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=inventoryVm:InventoryViewModel, IsDesignTimeCreatable=False}"
              d:DesignHeight="400" d:DesignWidth="900">
@@ -13,89 +14,8 @@
     <UserControl.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary Source="/GD.SaveEditor;component/Presentation/Views/Characters/ItemResources.xaml" />
+                <ResourceDictionary Source="/GD.SaveEditor;component/Presentation/Views/Inventory/BagResources.xaml" />
             </ResourceDictionary.MergedDictionaries>
-
-            <!-- Colors of the game's inventory: near-black cells with thin golden lines. -->
-            <SolidColorBrush x:Key="BagFrameBrush" Color="#5A4B2C" />
-            <SolidColorBrush x:Key="BagGoldBrush" Color="#D9B45A" />
-            <SolidColorBrush x:Key="BagHeaderBrush" Color="#221D17" />
-            <SolidColorBrush x:Key="DropValidBrush" Color="#404CE03C" />
-            <SolidColorBrush x:Key="DropValidBorderBrush" Color="#4CE03C" />
-            <SolidColorBrush x:Key="DropInvalidBrush" Color="#40F1707B" />
-            <SolidColorBrush x:Key="DropInvalidBorderBrush" Color="#F1707B" />
-
-            <!-- One 32 x 32 cell, tiled over the bag. -->
-            <DrawingBrush x:Key="BagCellBrush"
-                          TileMode="Tile"
-                          Stretch="None"
-                          Viewbox="0,0,32,32" ViewboxUnits="Absolute"
-                          Viewport="0,0,32,32" ViewportUnits="Absolute">
-                <DrawingBrush.Drawing>
-                    <GeometryDrawing Brush="#0E0D0C">
-                        <GeometryDrawing.Pen>
-                            <Pen Brush="#3D3523" Thickness="1" />
-                        </GeometryDrawing.Pen>
-                        <GeometryDrawing.Geometry>
-                            <RectangleGeometry Rect="0,0,32,32" />
-                        </GeometryDrawing.Geometry>
-                    </GeometryDrawing>
-                </DrawingBrush.Drawing>
-            </DrawingBrush>
-
-            <!--
-                An item in a bag: icon over a glow of its rarity, the stack size in the bottom-right corner, the game's
-                tooltip. Without an icon (database or Items.arc missing) the item name is shown.
-            -->
-            <DataTemplate x:Key="BagItemTemplate" DataType="{x:Type charactersVm:EquipmentSlotViewModel}">
-                <Border x:Name="Frame"
-                        Margin="1"
-                        BorderThickness="1"
-                        BorderBrush="{Binding Rarity, Converter={StaticResource RarityBrush}}"
-                        Background="{Binding Rarity, Converter={StaticResource RarityBrush}, ConverterParameter=Glow}"
-                        SnapsToDevicePixels="True"
-                        ToolTip="{StaticResource ItemToolTip}"
-                        ToolTipService.InitialShowDelay="150"
-                        ToolTipService.ShowDuration="60000">
-                    <Grid ClipToBounds="True">
-                        <Image Source="{Binding Icon}"
-                               Stretch="Uniform"
-                               StretchDirection="DownOnly"
-                               RenderOptions.BitmapScalingMode="HighQuality"
-                               HorizontalAlignment="Center"
-                               VerticalAlignment="Center" />
-
-                        <TextBlock x:Name="NameText"
-                                   Text="{Binding Name}"
-                                   Visibility="Collapsed"
-                                   Margin="1"
-                                   FontSize="8"
-                                   TextAlignment="Center"
-                                   TextWrapping="Wrap"
-                                   TextTrimming="CharacterEllipsis"
-                                   VerticalAlignment="Center"
-                                   Foreground="{Binding Rarity, Converter={StaticResource RarityBrush}}" />
-
-                        <TextBlock Text="{Binding QuantityText}"
-                                   Margin="0,0,2,0"
-                                   FontSize="11"
-                                   FontWeight="SemiBold"
-                                   HorizontalAlignment="Right"
-                                   VerticalAlignment="Bottom"
-                                   Foreground="White"
-                                   Style="{StaticResource OptionalTooltipText}">
-                            <TextBlock.Effect>
-                                <DropShadowEffect BlurRadius="2" ShadowDepth="1" Opacity="1" Color="Black" />
-                            </TextBlock.Effect>
-                        </TextBlock>
-                    </Grid>
-                </Border>
-                <DataTemplate.Triggers>
-                    <DataTrigger Binding="{Binding HasIcon}" Value="False">
-                        <Setter TargetName="NameText" Property="Visibility" Value="Visible" />
-                    </DataTrigger>
-                </DataTemplate.Triggers>
-            </DataTemplate>
 
             <!--
                 A bag: the cell grid with its items placed on it by cell. Items are dragged by the mouse; while one is
@@ -290,10 +210,13 @@
         </ResourceDictionary>
     </UserControl.Resources>
 
-    <!-- The bags under the equipment, like the game's inventory screen. -->
+    <!--
+        The bags under the equipment, like the game's inventory screen. The card stretches to the width of the
+        equipment and attributes row above it (CharacterView), with the bags centered in it.
+    -->
     <Border Margin="0,0,0,16"
             Padding="14"
-            HorizontalAlignment="Left"
+            HorizontalAlignment="Stretch"
             CornerRadius="6"
             BorderThickness="1"
             BorderBrush="{DynamicResource ControlBorderBrush}"
@@ -306,7 +229,7 @@
                        Text="The bags could not be read from the save file."
                        Visibility="{Binding HasInventory, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
 
-            <WrapPanel Orientation="Horizontal">
+            <WrapPanel Orientation="Horizontal" HorizontalAlignment="Center">
 
                 <!-- ===== Main bag with the iron bits above it ===== -->
                 <StackPanel Margin="0,0,16,0">
@@ -341,8 +264,8 @@
                                     Style="{StaticResource SubtleIconButtonStyle}"
                                     ToolTip="Undo all changes to the bags (moved, added, changed and removed items)"
                                     AutomationProperties.Name="Undo bag changes"
-                                    Command="{Binding ResetBagsCommand}"
-                                    Visibility="{Binding AreBagsChanged, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                    Command="{Binding ResetItemsCommand}"
+                                    Visibility="{Binding AreItemsChanged, Converter={StaticResource BooleanToVisibilityConverter}}">
                                 <wpf:MaterialIcon Kind="Undo" Width="16" Height="16" Foreground="{StaticResource BagGoldBrush}" />
                             </Button>
 
@@ -454,4 +377,4 @@
                        Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}" />
         </StackPanel>
     </Border>
-</UserControl>
+</local:ItemGridView>

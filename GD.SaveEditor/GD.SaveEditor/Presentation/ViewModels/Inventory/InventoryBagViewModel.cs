@@ -177,13 +177,24 @@ public sealed partial class InventoryItemViewModel : ViewModelBase
     }
 }
 
-/// <summary>One bag of the inventory: its grid, the items on it and the drop preview while an item is dragged.</summary>
+/// <summary>
+/// One bag of the inventory (or one stash tab): its grid, the items on it and the drop preview while an item is dragged.
+/// </summary>
 public sealed partial class InventoryBagViewModel : ViewModelBase
 {
-    public InventoryBagViewModel(int index, string name, int columns, int rows, IReadOnlyList<InventoryItem> items)
+    /// <param name="index">Position in the file (0 is the main bag; the first stash tab is 0 too).</param>
+    /// <param name="number">Label of the tab button; the index when <c>null</c>.</param>
+    /// <param name="isAvailable">
+    /// The container is in the file. A stash tab that was not bought in the game yet is shown locked: nothing can be put
+    /// on it.
+    /// </param>
+    public InventoryBagViewModel(
+        int index, string name, int columns, int rows, IReadOnlyList<InventoryItem> items, string? number = null, bool isAvailable = true)
     {
         Index = index;
         Name = name;
+        Number = number ?? index.ToString();
+        IsAvailable = isAvailable;
 
         // An item outside the usual size (a bag the game made bigger) still gets a cell.
         Columns = Math.Max(columns, items.Select(i => i.X + 1).DefaultIfEmpty(0).Max());
@@ -207,8 +218,13 @@ public sealed partial class InventoryBagViewModel : ViewModelBase
     /// <summary>"Main bag", "Bag 1", ...</summary>
     public string Name { get; }
 
-    /// <summary>Bag number on its tab button: "1" for the first bag beside the main bag.</summary>
-    public string Number => Index.ToString();
+    /// <summary>Number on its tab button: "1" for the first bag beside the main bag, or for the first stash tab.</summary>
+    public string Number { get; }
+
+    /// <summary>The container is in the file; <c>false</c> for a stash tab that was not bought in the game yet.</summary>
+    public bool IsAvailable { get; }
+
+    public bool IsLocked => !IsAvailable;
 
     public ObservableCollection<InventoryItemViewModel> Items { get; } = [];
 
@@ -217,7 +233,10 @@ public sealed partial class InventoryBagViewModel : ViewModelBase
     public bool IsEmpty => Items.Count == 0;
 
     /// <summary>"Bag 1 · 3 items" for the tab tooltip.</summary>
-    public string Summary => IsEmpty ? $"{Name} · empty" : $"{Name} · {ItemCount} item{(ItemCount == 1 ? "" : "s")}";
+    public string Summary =>
+        !IsAvailable ? $"{Name} · not bought yet in the game"
+        : IsEmpty ? $"{Name} · empty"
+        : $"{Name} · {ItemCount} item{(ItemCount == 1 ? "" : "s")}";
 
     /// <summary>Cells across: items can be put in columns 0 to <c>Columns - 1</c>.</summary>
     public int Columns { get; }
@@ -278,6 +297,9 @@ public sealed partial class InventoryBagViewModel : ViewModelBase
     /// </summary>
     public bool CanPlace(int columns, int rows, int x, int y, InventoryItemViewModel? ignore = null)
     {
+        if (!IsAvailable)
+            return false;
+
         if (x < 0 || y < 0 || x + columns > Columns || y + rows > Rows)
             return false;
 

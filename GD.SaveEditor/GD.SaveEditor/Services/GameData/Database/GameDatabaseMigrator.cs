@@ -26,10 +26,10 @@ public interface IGameDatabaseMigrator
 public sealed class GameDatabaseMigrator : IGameDatabaseMigrator
 {
     /// <summary>Raise when the importer stores records differently, so the next run re-reads the game files.</summary>
-    public const int ImportVersion = 2;
+    public const int ImportVersion = 3;
 
-    /// <summary><c>PRAGMA user_version</c> of the current schema.</summary>
-    private const int SchemaVersion = 1;
+    /// <summary><c>PRAGMA user_version</c> of the current schema (2: <c>waypoints</c>).</summary>
+    private const int SchemaVersion = 2;
 
     /// <summary>Statements sent to SQLite at once while a migration is applied.</summary>
     private const int StatementsPerBatch = 500;
@@ -46,6 +46,7 @@ public sealed class GameDatabaseMigrator : IGameDatabaseMigrator
         "CREATE INDEX IF NOT EXISTS ix_records_source ON records (source);",
         "CREATE TABLE IF NOT EXISTS tags (tag TEXT PRIMARY KEY COLLATE NOCASE, text TEXT NOT NULL, source TEXT NOT NULL);",
         "CREATE TABLE IF NOT EXISTS resources (archive TEXT NOT NULL COLLATE NOCASE, path TEXT NOT NULL COLLATE NOCASE, size INTEGER NOT NULL, hash INTEGER NOT NULL, PRIMARY KEY (archive, path));",
+        "CREATE TABLE IF NOT EXISTS waypoints (uid TEXT PRIMARY KEY COLLATE NOCASE, record TEXT NOT NULL, name_tag TEXT, campaign INTEGER NOT NULL, ordinal INTEGER NOT NULL, source TEXT NOT NULL);",
         "CREATE VIEW IF NOT EXISTS items AS SELECT r.path, r.class, r.source, r.name_tag, t.text AS name, r.fields FROM records r LEFT JOIN tags t ON t.tag = r.name_tag WHERE r.path LIKE 'records/items/%';",
         $"PRAGMA user_version = {SchemaVersion};"
     ];
@@ -134,10 +135,10 @@ public sealed class GameDatabaseMigrator : IGameDatabaseMigrator
             if (plan.IsEmpty)
             {
                 progress?.Report((1, "Nothing to migrate"));
-                return new GameMigrationResult(null, null, plan.Records, plan.Tags, plan.Resources);
+                return new GameMigrationResult(null, null, plan.Records, plan.Tags, plan.Resources, plan.Waypoints);
             }
 
-            var summary = $"records {plan.Records}; tags {plan.Tags}; resources {plan.Resources}";
+            var summary = $"records {plan.Records}; tags {plan.Tags}; resources {plan.Resources}; waypoints {plan.Waypoints}";
             WriteScript(scriptPath, name, summary, plan, snapshot);
 
             progress?.Report((0, $"Applying {Path.GetFileName(scriptPath)}"));
@@ -153,7 +154,7 @@ public sealed class GameDatabaseMigrator : IGameDatabaseMigrator
             }
 
             progress?.Report((1, $"Applied {Path.GetFileName(scriptPath)}"));
-            return new GameMigrationResult(name, scriptPath, plan.Records, plan.Tags, plan.Resources);
+            return new GameMigrationResult(name, scriptPath, plan.Records, plan.Tags, plan.Resources, plan.Waypoints);
         }
         finally
         {
@@ -175,11 +176,12 @@ public sealed class GameDatabaseMigrator : IGameDatabaseMigrator
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        var name = $"{DateTime.UtcNow:yyyyMMddHHmmss}_initial_schema";
+        // Every statement is "IF NOT EXISTS": an older database only gets the tables it is missing.
+        var name = $"{DateTime.UtcNow:yyyyMMddHHmmss}_schema_v{SchemaVersion}";
         var scriptPath = Path.Combine(GameDataPaths.MigrationsDirectory, name + ".sql");
-        var lines = new List<string> { $"-- Migration {name}: creates the tables of database.db." };
+        var lines = new List<string> { $"-- Migration {name}: creates the tables of database.db (schema version {SchemaVersion})." };
         lines.AddRange(SchemaStatements);
-        lines.Add(RecordMigrationStatement(name, "initial schema"));
+        lines.Add(RecordMigrationStatement(name, $"schema version {SchemaVersion}"));
         File.WriteAllLines(scriptPath, lines, new UTF8Encoding(false));
 
         ApplyScript(connection, scriptPath, SchemaStatements.Length + 1, null, cancellationToken);
@@ -197,16 +199,21 @@ public sealed class GameDatabaseMigrator : IGameDatabaseMigrator
         List<GameResourceRow> ResourceUpserts,
         List<(string Archive, string Path)> ResourceDeletes,
         List<GameSourceRow> SourceUpserts,
+        List<GameWaypointRow>? WaypointRows,
         bool ImportVersionChanged,
         TableChanges Records,
         TableChanges Tags,
-        TableChanges Resources)
+        TableChanges Resources,
+        TableChanges Waypoints)
     {
-        public bool IsEmpty => Records.IsEmpty && Tags.IsEmpty && Resources.IsEmpty && SourceUpserts.Count == 0 && !ImportVersionChanged;
+        public bool IsEmpty =>
+            Records.IsEmpty && Tags.IsEmpty && Resources.IsEmpty && Waypoints.IsEmpty && SourceUpserts.Count == 0 && !ImportVersionChanged;
 
+        /// <summary>The <c>waypoints</c> table is replaced as a whole (it holds about a hundred rows).</summary>
         public int StatementCount =>
             RecordUpserts.Count + RecordDeletes.Count + TagUpserts.Count + TagDeletes.Count
-            + ResourceUpserts.Count + ResourceDeletes.Count + SourceUpserts.Count + 2;
+            + ResourceUpserts.Count + ResourceDeletes.Count + SourceUpserts.Count
+            + (WaypointRows is null ? 0 : WaypointRows.Count + 1) + 2;
     }
 
     /// <summary>Only what the database does not hold yet: new rows, changed rows and rows of read sources that are gone.</summary>
@@ -304,6 +311,27 @@ public sealed class GameDatabaseMigrator : IGameDatabaseMigrator
             .Where(s => !existingSources.TryGetValue(s.Path, out var existing) || existing != s)
             .ToList();
 
+        // Waypoints: compared as a whole, replaced as a whole when anything differs.
+        List<GameWaypointRow>? waypointRows = null;
+        var waypointChanges = new TableChanges(0, 0, 0);
+        if (snapshot.WaypointsRead)
+        {
+            var existingWaypoints = new Dictionary<string, GameWaypointRow>(StringComparer.OrdinalIgnoreCase);
+            if (TableExists(connection, "waypoints"))
+            {
+                Query(connection, "SELECT uid, record, name_tag, campaign, ordinal, source FROM waypoints;", r =>
+                    existingWaypoints[r.GetString(0)] = new GameWaypointRow(r.GetString(0), r.GetString(1),
+                        r.IsDBNull(2) ? null : r.GetString(2), r.GetInt32(3), r.GetInt32(4), r.GetString(5)));
+            }
+
+            var added = snapshot.Waypoints.Keys.Count(uid => !existingWaypoints.ContainsKey(uid));
+            var updated = snapshot.Waypoints.Values.Count(w => existingWaypoints.TryGetValue(w.Uid, out var e) && e != w);
+            var removed = existingWaypoints.Keys.Count(uid => !snapshot.Waypoints.ContainsKey(uid));
+            waypointChanges = new TableChanges(added, updated, removed);
+            if (!waypointChanges.IsEmpty)
+                waypointRows = snapshot.Waypoints.Values.OrderBy(w => w.Campaign).ThenBy(w => w.Ordinal).ToList();
+        }
+
         var importVersionChanged = true;
         Query(connection, $"SELECT value FROM meta WHERE key = '{ImportVersionKey}';", r =>
             importVersionChanged = r.GetString(0) != ImportVersion.ToString(CultureInfo.InvariantCulture));
@@ -313,10 +341,12 @@ public sealed class GameDatabaseMigrator : IGameDatabaseMigrator
             tagUpserts, tagDeletes,
             resourceUpserts, resourceDeletes,
             sourceUpserts,
+            waypointRows,
             importVersionChanged,
             new TableChanges(recordsAdded, recordUpserts.Count - recordsAdded, recordDeletes.Count),
             new TableChanges(tagsAdded, tagUpserts.Count - tagsAdded, tagDeletes.Count),
-            new TableChanges(resourcesAdded, resourceUpserts.Count - resourcesAdded, resourceDeletes.Count));
+            new TableChanges(resourcesAdded, resourceUpserts.Count - resourcesAdded, resourceDeletes.Count),
+            waypointChanges);
     }
 
     #endregion
@@ -348,6 +378,14 @@ public sealed class GameDatabaseMigrator : IGameDatabaseMigrator
                 $"INSERT OR REPLACE INTO resources (archive, path, size, hash) VALUES ({Sql(row.Archive)}, {Sql(row.Path)}, {row.Size.ToString(CultureInfo.InvariantCulture)}, {row.Hash.ToString(CultureInfo.InvariantCulture)});");
         foreach (var (archive, resourcePath) in plan.ResourceDeletes)
             writer.WriteLine($"DELETE FROM resources WHERE archive = {Sql(archive)} AND path = {Sql(resourcePath)};");
+
+        if (plan.WaypointRows is { } waypoints)
+        {
+            writer.WriteLine("DELETE FROM waypoints;");
+            foreach (var row in waypoints)
+                writer.WriteLine(
+                    $"INSERT INTO waypoints (uid, record, name_tag, campaign, ordinal, source) VALUES ({Sql(row.Uid)}, {Sql(row.Record)}, {Sql(row.NameTag)}, {row.Campaign.ToString(CultureInfo.InvariantCulture)}, {row.Ordinal.ToString(CultureInfo.InvariantCulture)}, {Sql(row.Source)});");
+        }
 
         foreach (var row in plan.SourceUpserts)
             writer.WriteLine(

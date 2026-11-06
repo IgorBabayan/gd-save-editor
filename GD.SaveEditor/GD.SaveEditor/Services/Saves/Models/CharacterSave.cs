@@ -43,8 +43,32 @@ public sealed record CharacterSave
     /// <summary>Items in the bags; <c>null</c> when that part of the file could not be read (see <see cref="DetailsError"/>).</summary>
     public CharacterInventory? Inventory { get; init; }
 
+    /// <summary>Unlocked waypoints per difficulty; <c>null</c> when that part of the file could not be read.</summary>
+    public CharacterWaypoints? Waypoints { get; init; }
+
+    /// <summary>Reputation with every faction; <c>null</c> when that part of the file could not be read.</summary>
+    public CharacterFactions? Factions { get; init; }
+
+    /// <summary>Tabs of the personal stash the character bought; <c>null</c> when that part of the file could not be read.</summary>
+    public CharacterStash? Stash { get; init; }
+
+    /// <summary>
+    /// int32 fields the file stores after the stack count of every item (see <see cref="CharacterFile.ItemExtraFields"/>);
+    /// <c>null</c> when the bags could not be read.
+    /// </summary>
+    public int? ItemExtraFields { get; init; }
+
     /// <summary>Iron bits the character carries; <c>null</c> when that part of the file could not be read.</summary>
     public uint? Money { get; init; }
+
+    /// <summary>
+    /// Highest difficulty the character may play; <c>null</c> when the character info could not be read or holds a
+    /// value the editor does not know.
+    /// </summary>
+    public GameDifficulty? UnlockedDifficulty { get; init; }
+
+    /// <summary>Crucible tributes; <c>null</c> when the character info could not be read or has none (old saves).</summary>
+    public uint? CrucibleTributes { get; init; }
 
     /// <summary>
     /// Why the editor cannot write changes into this file (a part of it has a layout the editor does not know);

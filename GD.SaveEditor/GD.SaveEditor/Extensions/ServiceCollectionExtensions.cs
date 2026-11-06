@@ -12,6 +12,7 @@ using GD.SaveEditor.Services.GameData;
 using GD.SaveEditor.Services.GameData.Database;
 using GD.SaveEditor.Services.GameData.Items;
 using GD.SaveEditor.Services.GameData.Textures;
+using GD.SaveEditor.Services.GameData.Waypoints;
 using GD.SaveEditor.Services.Notifications;
 using GD.SaveEditor.Services.Saves;
 using GD.SaveEditor.Services.Settings;
@@ -41,6 +42,10 @@ static class ServiceCollectionExtensions
             services.AddSingleton<ISaveFolderLoader, SaveFolderLoader>();
             services.AddSingleton<ICharacterSaveWriter, CharacterSaveWriter>();
             services.AddSingleton<ICharacterSaveEditor, CharacterSaveEditor>();
+            // Shared stash (transfer.gst / transfer.gsh)
+            services.AddSingleton<ITransferStashService, TransferStashService>();
+            // Material storage of the Smuggler (reagents.gst / reagents.gsh)
+            services.AddSingleton<IMaterialStorageService, MaterialStorageService>();
 
             // Game data (%APPDATA%\GD.SaveEditor\database.db) built from the game's .arz / .arc files
             services.AddSingleton<IGameFileProvider, GameFileProvider>();
@@ -49,6 +54,7 @@ static class ServiceCollectionExtensions
             services.AddSingleton<IGameTextProvider, GameTextProvider>();
             services.AddSingleton<IGameItemProvider, GameItemProvider>();
             services.AddSingleton<IGameIconProvider, GameIconProvider>();
+            services.AddSingleton<IGameWaypointProvider, GameWaypointProvider>();
             services.AddSingleton<IItemCatalog, ItemCatalog>();
 
             return services;
@@ -65,7 +71,7 @@ static class ServiceCollectionExtensions
             // Notification center (bell in the title bar)
             services.AddSingleton<NotificationCenterViewModel>();
 
-            // Character details (Character / Inventory / Waypoints tabs)
+            // Character details (Character / Stash / Waypoints / Factions tabs)
             services.AddSingleton<CharacterViewModelFactory>();
 
             // Shell

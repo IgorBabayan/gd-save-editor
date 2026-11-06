@@ -535,7 +535,7 @@
                     <Button Margin="0,0,24,0"
                             Style="{StaticResource DialogButtonStyle}"
                             Content="_Remove item"
-                            ToolTip="Remove this item from the bag"
+                            ToolTip="Remove this item from the character"
                             Command="{Binding RemoveCommand}"
                             Visibility="{Binding CanRemove, Converter={StaticResource BooleanToVisibilityConverter}}" />
                     <Button Style="{StaticResource AccentButtonStyle}"

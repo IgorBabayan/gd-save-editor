@@ -6,6 +6,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using GD.SaveEditor.Services.GameData.Archives;
 using GD.SaveEditor.Services.GameData.Database;
+using GD.SaveEditor.Services.GameData.Waypoints;
 using Microsoft.Data.Sqlite;
 
 namespace GD.SaveEditor.Services.GameData;
@@ -15,7 +16,8 @@ namespace GD.SaveEditor.Services.GameData;
 /// <list type="number">
 /// <item>gets every <see cref="GameFile"/> (GrimTools download, else the game folder);</item>
 /// <item>stops early when they are the same files the database was built from;</item>
-/// <item>reads the item records of the .arz databases, the texts of <c>Text_EN.arc</c> and the file list of <c>Items.arc</c>;</item>
+/// <item>reads the item records of the .arz databases, the texts of <c>Text_EN.arc</c>, the file list of <c>Items.arc</c>
+/// and the rift gates (waypoints) of the world maps in the <c>Levels.arc</c> archives of the game folder;</item>
 /// <item>lets <see cref="IGameDatabaseMigrator"/> write and apply a migration with only the differences.</item>
 /// </list>
 /// </summary>
@@ -65,7 +67,7 @@ public sealed class DatabaseGenerator(IGameFileProvider fileProvider, IGameDatab
                     _ => $"From an earlier download: {provided.LocalPath}"
                 });
 
-                if (provided.Origin == GameFileOrigin.GameFolder)
+                if (provided.Origin == GameFileOrigin.GameFolder && !file.GameFolderOnly)
                     run.Log(DatabaseGeneratorMessageLevel.Info, $"{file.FileName}: {provided.FailureReason}; used the game folder instead.");
                 else if (provided.Origin == GameFileOrigin.EarlierDownload)
                     run.Log(DatabaseGeneratorMessageLevel.Warning, $"{file.FileName}: {provided.FailureReason}; used an earlier download.");
@@ -81,16 +83,22 @@ public sealed class DatabaseGenerator(IGameFileProvider fileProvider, IGameDatab
                 return run.Result(DatabaseGenerationStatus.Succeeded);
             }
 
-            // 3. Read the game files
+            // 3. Read the game files. The world maps go first: the records of their rift gates are read from the
+            //    .arz databases as well (for the gates' names), although they are not stored in the records table.
             var snapshot = new GameDataSnapshot();
             snapshot.Sources.AddRange(sources);
+            var gates = ReadLevels(run, files, snapshot, cancellationToken);
+            var gateRecords = new Dictionary<string, GateRecord>(StringComparer.OrdinalIgnoreCase);
+            foreach (var gate in gates)
+                gateRecords.TryAdd(gate.Gate.RecordPath, new GateRecord(null, null, Found: false));
+
             foreach (var file in files)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 switch (file.File.Kind)
                 {
                     case GameFileKind.Database:
-                        ReadDatabase(run, file, snapshot, cancellationToken);
+                        ReadDatabase(run, file, snapshot, gateRecords, cancellationToken);
                         break;
                     case GameFileKind.Text:
                         ReadTexts(run, file, snapshot, cancellationToken);
@@ -98,10 +106,16 @@ public sealed class DatabaseGenerator(IGameFileProvider fileProvider, IGameDatab
                     case GameFileKind.Resources:
                         ReadResources(run, file, snapshot, cancellationToken);
                         break;
+                    case GameFileKind.Levels:
+                        // Read above.
+                        continue;
                 }
 
                 snapshot.ProcessedSources.Add(file.File.FileName);
             }
+
+            if (snapshot.WaypointsRead)
+                AddWaypoints(run, gates, gateRecords, snapshot);
 
             // 4. Migration with only the differences
             var migrateStep = run.StartStep("Migrating database.db");
@@ -109,7 +123,7 @@ public sealed class DatabaseGenerator(IGameFileProvider fileProvider, IGameDatab
             migrateStep.Finish(true, migration.WasApplied ? Path.GetFileName(migration.ScriptPath) : "Nothing to migrate");
 
             run.Log(DatabaseGeneratorMessageLevel.Success, migration.WasApplied
-                ? $"Migration {migration.Name} applied: records {migration.Records}; texts {migration.Tags}; resources {migration.Resources}."
+                ? $"Migration {migration.Name} applied: records {migration.Records}; texts {migration.Tags}; resources {migration.Resources}; waypoints {migration.Waypoints}."
                 : "database.db already holds everything from the game files: no migration needed.");
 
             return run.Result(DatabaseGenerationStatus.Succeeded);
@@ -191,24 +205,150 @@ public sealed class DatabaseGenerator(IGameFileProvider fileProvider, IGameDatab
 
     #region Readers
 
-    private static void ReadDatabase(Run run, ProvidedGameFile file, GameDataSnapshot snapshot, CancellationToken cancellationToken)
+    private static void ReadDatabase(
+        Run run,
+        ProvidedGameFile file,
+        GameDataSnapshot snapshot,
+        Dictionary<string, GateRecord> gateRecords,
+        CancellationToken cancellationToken)
     {
         var step = run.StartStep($"Reading {file.File.FileName}");
         var records = ArzReader.ReadRecords(
             file.LocalPath,
-            IsImportedRecord,
+            name => IsImportedRecord(name) || gateRecords.ContainsKey(name),
             new InlineProgress<double>(f => step.Report((f, $"{file.File.FileName}: {f:P0} of the record table"))),
             cancellationToken);
 
+        var imported = 0;
         foreach (var record in records)
         {
             // Expansions are read after the base game: their version of a record wins.
+            if (gateRecords.ContainsKey(record.Name))
+                gateRecords[record.Name] = new GateRecord(record.GetString("Class"), GateNameTag(record), Found: true);
+
+            if (!IsImportedRecord(record.Name))
+                continue;
+
             var row = ToRow(record, file.File.FileName);
             snapshot.Records[row.Path] = row;
+            imported++;
         }
 
-        step.Finish(true, $"{records.Count:N0} item records");
+        step.Finish(true, $"{imported:N0} item records");
     }
+
+    #region Waypoints
+
+    /// <summary>Fields of a rift gate record that name it, the best first.</summary>
+    private static readonly string[] GateNameFields = ["journalTag", "description", "FileDescription"];
+
+    /// <summary>What the record of a rift gate says about it.</summary>
+    private sealed record GateRecord(string? Class, string? NameTag, bool Found);
+
+    /// <summary>A rift gate of a world map with the campaign it was first found in.</summary>
+    private sealed record CampaignGate(WorldRiftGate Gate, GameWaypointCampaign Campaign, int Ordinal, string Source);
+
+    /// <summary>
+    /// The rift gates of every <c>Levels.arc</c>, base game first: a gate belongs to the first campaign whose world map
+    /// has it (each expansion ships the whole world again). Sets <see cref="GameDataSnapshot.WaypointsRead"/> when at
+    /// least one archive could be read; one that cannot is reported and its campaign's new gates are missing.
+    /// </summary>
+    private static List<CampaignGate> ReadLevels(
+        Run run, List<ProvidedGameFile> files, GameDataSnapshot snapshot, CancellationToken cancellationToken)
+    {
+        var levels = files
+            .Where(f => f.File.Kind == GameFileKind.Levels)
+            .Select(f => (File: f, Campaign: GameWaypointCampaigns.FromLevelsArchive(f.File.RelativePath)))
+            .Where(f => f.Campaign is not null)
+            .OrderBy(f => f.Campaign)
+            .ToList();
+
+        var gates = new List<CampaignGate>();
+        if (levels.Count == 0)
+        {
+            run.Log(DatabaseGeneratorMessageLevel.Warning,
+                "No Levels.arc was found in the game folder: the waypoints were not updated. Set the Grim Dawn folder in Settings to get them.");
+            return gates;
+        }
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var anyRead = false;
+        foreach (var (file, campaign) in levels)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var step = run.StartStep($"Reading the waypoints of {file.File.RelativePath}");
+            step.Report((0, "world001.map"));
+            try
+            {
+                var found = WorldRiftGateReader.Read(file.LocalPath);
+                var added = 0;
+                for (var i = 0; i < found.Count; i++)
+                {
+                    if (seen.Add(found[i].Uid))
+                    {
+                        gates.Add(new CampaignGate(found[i], campaign!.Value, i, file.File.RelativePath));
+                        added++;
+                    }
+                }
+
+                step.Finish(true, $"{found.Count} rift gates, {added} new");
+                anyRead = true;
+            }
+            catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException or OverflowException)
+            {
+                step.Finish(false, ex.Message);
+                run.Log(DatabaseGeneratorMessageLevel.Warning,
+                    $"The {GameWaypointCampaigns.Title(campaign!.Value)} waypoints could not be read from {file.File.RelativePath}: {ex.Message}");
+            }
+        }
+
+        snapshot.WaypointsRead = anyRead;
+        if (!anyRead)
+            run.Log(DatabaseGeneratorMessageLevel.Warning, "No waypoints could be read: the waypoints in database.db were kept as they were.");
+        return gates;
+    }
+
+    /// <summary>
+    /// The gates that are teleporters (gates whose record has another class, e.g. a portal that is not a waypoint, are
+    /// left out) as rows of <see cref="GameDataSnapshot.Waypoints"/>.
+    /// </summary>
+    private static void AddWaypoints(
+        Run run, List<CampaignGate> gates, Dictionary<string, GateRecord> gateRecords, GameDataSnapshot snapshot)
+    {
+        var skipped = 0;
+        foreach (var gate in gates)
+        {
+            var record = gateRecords.GetValueOrDefault(gate.Gate.RecordPath);
+            if (record is { Found: true, Class: { Length: > 0 } recordClass }
+                && !recordClass.Contains("Teleport", StringComparison.OrdinalIgnoreCase))
+            {
+                skipped++;
+                continue;
+            }
+
+            snapshot.Waypoints[gate.Gate.Uid] = new GameWaypointRow(
+                gate.Gate.Uid, gate.Gate.RecordPath, record?.NameTag, (int)gate.Campaign, gate.Ordinal, gate.Source);
+        }
+
+        var counts = GameWaypointCampaigns.All
+            .Select(c => $"{GameWaypointCampaigns.Title(c)}: {snapshot.Waypoints.Values.Count(w => w.Campaign == (int)c)}");
+        run.Log(DatabaseGeneratorMessageLevel.Info,
+            $"Waypoints found: {string.Join("; ", counts)}{(skipped > 0 ? $" ({skipped} gates that are not teleporters left out)" : string.Empty)}.");
+    }
+
+    /// <summary>The name of a rift gate record: its journal tag, else its description, else its file description.</summary>
+    private static string? GateNameTag(ArzRecord record)
+    {
+        foreach (var field in GateNameFields)
+        {
+            if (record.GetString(field) is { Length: > 0 } value && value != "???")
+                return value;
+        }
+
+        return null;
+    }
+
+    #endregion
 
     private static void ReadTexts(Run run, ProvidedGameFile file, GameDataSnapshot snapshot, CancellationToken cancellationToken)
     {

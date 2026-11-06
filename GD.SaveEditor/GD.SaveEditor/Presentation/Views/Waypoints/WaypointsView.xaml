@@ -4,12 +4,167 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:waypointsVm="clr-namespace:GD.SaveEditor.Presentation.ViewModels.Waypoints"
+             xmlns:wpf="clr-namespace:Material.Icons.WPF;assembly=Material.Icons.WPF"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=waypointsVm:WaypointsViewModel, IsDesignTimeCreatable=False}"
              d:DesignHeight="700" d:DesignWidth="900">
 
-    <!-- Placeholder until the waypoint editor is implemented. -->
-    <Border Margin="0,16,0,0" Style="{StaticResource InventorySectionBorderStyle}">
-        <TextBlock Style="{StaticResource EmptyPageTextStyle}" Text="The waypoint editor is not available yet." />
-    </Border>
+    <UserControl.Resources>
+        <Style x:Key="NoteTextStyle" TargetType="TextBlock">
+            <Setter Property="Margin" Value="0,8,0,0" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Foreground" Value="{DynamicResource WarningForegroundBrush}" />
+        </Style>
+
+        <!-- One waypoint: checked = unlocked in the selected difficulty; not saved changes in the accent color. -->
+        <DataTemplate x:Key="WaypointTemplate" DataType="{x:Type waypointsVm:WaypointItemViewModel}">
+            <CheckBox Margin="0,3,12,3"
+                      IsChecked="{Binding IsUnlocked, Mode=TwoWay}"
+                      IsEnabled="{Binding CanEdit}"
+                      ToolTip="{Binding ToolTip}"
+                      AutomationProperties.Name="{Binding Name}">
+                <TextBlock x:Name="NameText" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+            </CheckBox>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsChanged}" Value="True">
+                    <Setter TargetName="NameText" Property="Foreground" Value="{DynamicResource AccentBrush}" />
+                    <Setter TargetName="NameText" Property="FontWeight" Value="SemiBold" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <!-- A campaign: title, unlocked count, "Unlock all", then its waypoints in three columns. -->
+        <DataTemplate x:Key="CampaignTemplate" DataType="{x:Type waypointsVm:WaypointCampaignViewModel}">
+            <Border Margin="0,12,0,0"
+                    Padding="16,12"
+                    MinHeight="0"
+                    Style="{StaticResource InventorySectionBorderStyle}">
+                <StackPanel>
+                    <DockPanel LastChildFill="False">
+                        <TextBlock DockPanel.Dock="Left"
+                                   VerticalAlignment="Center"
+                                   Text="{Binding Title}"
+                                   Style="{StaticResource SectionHeaderTextStyle}" />
+                        <Border x:Name="CountBadge"
+                                DockPanel.Dock="Left"
+                                Margin="10,0,0,0"
+                                Style="{StaticResource BadgeBorderStyle}"
+                                BorderBrush="{DynamicResource ControlBorderBrush}"
+                                Visibility="{Binding HasWaypoints, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <TextBlock x:Name="CountText" Text="{Binding CountText}" FontSize="11"
+                                       Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                        </Border>
+                        <Button DockPanel.Dock="Right"
+                                MinWidth="0"
+                                MinHeight="26"
+                                Padding="10,2"
+                                Style="{StaticResource DialogButtonStyle}"
+                                Command="{Binding UnlockAllCommand}"
+                                ToolTip="Unlock every waypoint of this campaign in the selected difficulty"
+                                AutomationProperties.Name="{Binding Title, StringFormat='Unlock all {0} waypoints'}"
+                                Visibility="{Binding HasWaypoints, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <StackPanel Orientation="Horizontal">
+                                <wpf:MaterialIcon Kind="LockOpenVariantOutline" Width="14" Height="14" />
+                                <TextBlock Text="Unlock all" Margin="6,0,0,0" FontSize="12" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                    </DockPanel>
+
+                    <ItemsControl Margin="0,10,0,0"
+                                  ItemsSource="{Binding Waypoints}"
+                                  ItemTemplate="{StaticResource WaypointTemplate}"
+                                  Focusable="False"
+                                  Visibility="{Binding HasWaypoints, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <UniformGrid Columns="3" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+
+                    <TextBlock Margin="0,8,0,0"
+                               Text="{Binding EmptyText}"
+                               Style="{StaticResource SecondaryTextStyle}"
+                               Visibility="{Binding HasWaypoints, Converter={StaticResource InverseBooleanToVisibilityConverter}}" />
+                </StackPanel>
+            </Border>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsComplete}" Value="True">
+                    <Setter TargetName="CountBadge" Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+                    <Setter TargetName="CountText" Property="Foreground" Value="{DynamicResource AccentBrush}" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="0,16,0,16">
+            <!-- ===== Difficulty, totals and the buttons for every campaign ===== -->
+            <Border Padding="16,12" MinHeight="0" Style="{StaticResource InventorySectionBorderStyle}">
+                <StackPanel>
+                    <DockPanel LastChildFill="False">
+                        <TextBlock DockPanel.Dock="Left"
+                                   VerticalAlignment="Center"
+                                   Text="Waypoints"
+                                   Style="{StaticResource SectionHeaderTextStyle}" />
+                        <!-- Puts every list back as the save file has it (shown while one is changed). -->
+                        <Button DockPanel.Dock="Right"
+                                Style="{StaticResource SubtleIconButtonStyle}"
+                                ToolTip="Undo all waypoint changes (every difficulty)"
+                                AutomationProperties.Name="Undo waypoint changes"
+                                Command="{Binding ResetAllCommand}"
+                                Visibility="{Binding HasChanges, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <StackPanel Orientation="Horizontal">
+                                <wpf:MaterialIcon Kind="Undo" Width="16" Height="16" Foreground="{DynamicResource AccentBrush}" />
+                                <TextBlock Text="Undo all" Margin="4,0,0,0" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource AccentBrush}" />
+                            </StackPanel>
+                        </Button>
+                    </DockPanel>
+
+                    <WrapPanel Margin="0,10,0,0">
+                        <ListBox Style="{StaticResource PillListBoxStyle}"
+                                 AutomationProperties.Name="Difficulty"
+                                 ItemsSource="{Binding DifficultyOptions}"
+                                 SelectedItem="{Binding SelectedDifficulty}"
+                                 DisplayMemberPath="Label"
+                                 ToolTip="Difficulty whose waypoints are shown (each difficulty has its own)" />
+                        <TextBlock Margin="12,0,0,0"
+                                   VerticalAlignment="Center"
+                                   Text="{Binding SummaryText}"
+                                   Style="{StaticResource SecondaryTextStyle}" />
+                    </WrapPanel>
+
+                    <WrapPanel Margin="0,12,0,0">
+                        <Button Margin="0,0,8,0"
+                                Style="{StaticResource AccentButtonStyle}"
+                                Command="{Binding UnlockAllInDifficultyCommand}"
+                                ToolTip="Unlock every waypoint of every campaign in the selected difficulty">
+                            <TextBlock Text="{Binding SelectedDifficulty.Label, StringFormat='Unlock all in {0}'}" />
+                        </Button>
+                        <Button Style="{StaticResource DialogButtonStyle}"
+                                Command="{Binding UnlockAllEverywhereCommand}"
+                                Content="Unlock all in every difficulty"
+                                ToolTip="Unlock every waypoint of every campaign in Normal, Elite and Ultimate" />
+                    </WrapPanel>
+
+                    <TextBlock Text="{Binding StatusMessage}"
+                               Style="{StaticResource NoteTextStyle}"
+                               Visibility="{Binding HasStatusMessage, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                    <TextBlock Text="{Binding DifficultyHint}"
+                               Style="{StaticResource NoteTextStyle}"
+                               Visibility="{Binding HasDifficultyHint, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                    <TextBlock Text="{Binding UnknownText}"
+                               Style="{StaticResource NoteTextStyle}"
+                               Foreground="{DynamicResource SecondaryForegroundBrush}"
+                               Visibility="{Binding HasUnknown, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                </StackPanel>
+            </Border>
+
+            <!-- ===== One card per campaign ===== -->
+            <ItemsControl ItemsSource="{Binding Campaigns}"
+                          ItemTemplate="{StaticResource CampaignTemplate}"
+                          Focusable="False" />
+        </StackPanel>
+    </ScrollViewer>
 </UserControl>

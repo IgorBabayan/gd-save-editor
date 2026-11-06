@@ -56,8 +56,10 @@ public sealed class GameFileProvider(ISettingsService settingsService) : IGameFi
     {
         var cachePath = Path.Combine(GameDataPaths.GameFilesDirectory, ToLocalPath(file.RelativePath));
 
-        // 1. GrimTools
-        var downloadFailure = await TryDownloadAsync(file, cachePath, progress, cancellationToken);
+        // 1. GrimTools (not for the files only read from the installation)
+        var downloadFailure = file.GameFolderOnly
+            ? $"{file.FileName} is only read from the game folder"
+            : await TryDownloadAsync(file, cachePath, progress, cancellationToken);
         if (downloadFailure is null)
             return (new ProvidedGameFile(file, cachePath, GameFileOrigin.Downloaded, null), null);
 
@@ -76,7 +78,7 @@ public sealed class GameFileProvider(ISettingsService settingsService) : IGameFi
         }
 
         // 3. An earlier download
-        if (File.Exists(cachePath) && IsValid(file, cachePath))
+        if (!file.GameFolderOnly && File.Exists(cachePath) && IsValid(file, cachePath))
         {
             progress?.Report((1, $"Using the earlier download {cachePath}"));
             return (new ProvidedGameFile(file, cachePath, GameFileOrigin.EarlierDownload, downloadFailure), null);

@@ -13,7 +13,8 @@ namespace GD.SaveEditor.Services.Saves;
 /// <c>int32 id, int32 length (key unchanged), body, int32 0 (key unchanged)</c>.
 /// <para>
 /// Block 1 holds the iron bits, block 2 ("bio") level, experience, unspent points and attributes, block 3 the bags
-/// and the equipment. The blocks after them (stash, waypoints, skills, factions, UI, statistics, ...) are read value by
+/// and the equipment, block 4 the personal stash, block 6 the unlocked waypoints, block 13 the reputation with every
+/// faction. The other blocks after them (skills, UI, statistics, ...) are read value by
 /// value as well, only so the file can be encrypted again after a change (see <see cref="GdcWriter"/>): every value
 /// has to be read with its exact size.
 /// </para>
@@ -68,11 +69,53 @@ public sealed class CharacterFile
     public CharacterEquipment? Equipment { get; private set; }
     public CharacterInventory? Inventory { get; private set; }
 
+    /// <summary>Unlocked waypoints (block 6) per difficulty; <c>null</c> when the block could not be read.</summary>
+    public CharacterWaypoints? Waypoints { get; private set; }
+
+    /// <summary>Reputation with every faction (block 13); <c>null</c> when the block could not be read.</summary>
+    public CharacterFactions? Factions { get; private set; }
+
+    /// <summary>The personal stash (block 4); <c>null</c> when the block could not be read.</summary>
+    public CharacterStash? Stash { get; private set; }
+
+    /// <summary>
+    /// File offsets of the values of every faction, in the order of <see cref="Factions"/>, to change them in place
+    /// (see <see cref="CharacterSaveEditor"/>); <c>null</c> when the block could not be read.
+    /// </summary>
+    public IReadOnlyList<FactionValueOffsets>? FactionOffsets { get; private set; }
+
     /// <summary>Iron bits; <c>null</c> when block 1 could not be read.</summary>
     public uint? Money { get; private set; }
 
     /// <summary>File offset of the iron bits value, to change it (see <see cref="GdcWriter"/>).</summary>
     public int? MoneyOffset { get; private set; }
+
+    /// <summary>File offset of the name's length; the name's characters follow it, two bytes each.</summary>
+    public int NameOffset { get; private set; }
+
+    /// <summary>File offset of the "male" flag of the header.</summary>
+    public int IsMaleOffset { get; private set; }
+
+    /// <summary>Difficulty the character plays (character info); <c>null</c> when block 1 could not be read.</summary>
+    public byte? Difficulty { get; private set; }
+
+    public int? DifficultyOffset { get; private set; }
+
+    /// <summary>Highest difficulty unlocked (character info); <c>null</c> when block 1 could not be read.</summary>
+    public byte? GreatestDifficulty { get; private set; }
+
+    public int? GreatestDifficultyOffset { get; private set; }
+
+    /// <summary>Crucible tributes (character info version 4+); <c>null</c> when block 1 could not be read or has none.</summary>
+    public uint? Tributes { get; private set; }
+
+    public int? TributesOffset { get; private set; }
+
+    /// <summary>
+    /// File offset of the level in the bio block, the first of its 11 values (see <see cref="ReadBio"/>);
+    /// <c>null</c> when the block could not be read.
+    /// </summary>
+    public int? StatsOffset { get; private set; }
 
     /// <summary>Why stats, equipment or bags could not be read; <c>null</c> when they were.</summary>
     public string? DetailsError { get; private set; }
@@ -95,9 +138,36 @@ public sealed class CharacterFile
     /// </summary>
     public InventoryTokenLayout? InventoryLayout { get; private set; }
 
+    /// <summary>
+    /// Where the 16 equipment slots are in <see cref="Tokens"/>, to write other items into them; <c>null</c> unless read
+    /// with <c>recordTokens</c> and the inventory has items.
+    /// </summary>
+    public EquipmentTokenLayout? EquipmentLayout { get; private set; }
+
+    /// <summary>
+    /// Where the waypoint lists (block 6) are in <see cref="Tokens"/>, to write other lists; <c>null</c> unless read with
+    /// <c>recordTokens</c>.
+    /// </summary>
+    public WaypointTokenLayout? WaypointLayout { get; private set; }
+
+    /// <summary>
+    /// Where the personal stash tabs (block 4) are in <see cref="Tokens"/>, to write the items back in other places;
+    /// <c>null</c> unless read with <c>recordTokens</c>.
+    /// </summary>
+    public StashTokenLayout? StashLayout { get; private set; }
+
+    private int _stashLengthToken = -1;
+    private int _stashEndToken = -1;
+    private List<StashTabTokenLayout>? _stashTabs;
+
+    private int _teleportLengthToken = -1;
+    private int _teleportEndToken = -1;
+    private List<UidListTokenLayout>? _teleportLists;
+
     private int _inventoryLengthToken = -1;
     private int _inventoryEndToken = -1;
     private List<BagTokenLayout>? _bagLayouts;
+    private List<SlotTokenLayout>? _slotLayouts;
 
     /// <summary>Reads a character file.</summary>
     /// <param name="recordTokens">Keep every value (<see cref="Tokens"/>) to encrypt the file again.</param>
@@ -115,14 +185,13 @@ public sealed class CharacterFile
         if (version < 1)
             throw new InvalidDataException($"Unsupported character file version {version}.");
 
-        var file = new CharacterFile
-        {
-            Name = reader.ReadWideString(),
-            IsMale = reader.ReadBool(),
-            ClassTag = reader.ReadString(),
-            Level = reader.ReadInt32(),
-            Hardcore = reader.ReadBool()
-        };
+        var file = new CharacterFile { NameOffset = reader.Position };
+        file.Name = reader.ReadWideString();
+        file.IsMaleOffset = reader.Position;
+        file.IsMale = reader.ReadBool();
+        file.ClassTag = reader.ReadString();
+        file.Level = reader.ReadInt32();
+        file.Hardcore = reader.ReadBool();
         file.ExpansionStatus = version >= 2 ? reader.ReadByte() : (byte)0;
 
         try
@@ -145,6 +214,15 @@ public sealed class CharacterFile
         if (recordTokens && file.RewriteError is null && file._bagLayouts is { Count: > 0 } bags
             && file._inventoryLengthToken >= 0 && file._inventoryEndToken >= 0)
             file.InventoryLayout = new InventoryTokenLayout(file._inventoryLengthToken, file._inventoryEndToken, bags);
+        if (recordTokens && file.RewriteError is null && file._slotLayouts is { Count: > 0 } slots
+            && file._inventoryLengthToken >= 0 && file._inventoryEndToken >= 0)
+            file.EquipmentLayout = new EquipmentTokenLayout(file._inventoryLengthToken, file._inventoryEndToken, slots);
+        if (recordTokens && file.RewriteError is null && file._teleportLists is { Count: > 0 } lists
+            && file._teleportLengthToken >= 0 && file._teleportEndToken >= 0)
+            file.WaypointLayout = new WaypointTokenLayout(file._teleportLengthToken, file._teleportEndToken, lists);
+        if (recordTokens && file.RewriteError is null && file._stashTabs is { } tabs
+            && file._stashLengthToken >= 0 && file._stashEndToken >= 0)
+            file.StashLayout = new StashTokenLayout(file._stashLengthToken, file._stashEndToken, tabs);
         return file;
     }
 
@@ -172,6 +250,10 @@ public sealed class CharacterFile
             else
             {
                 ReadBlockAfterInventory(reader, id, end);
+                if (id == TeleportBlockId && _teleportLists is not null)
+                    (_teleportLengthToken, _teleportEndToken) = (blockToken + 1, reader.TokenCount);
+                if (id == StashBlockId && _stashTabs is not null)
+                    (_stashLengthToken, _stashEndToken) = (blockToken + 1, reader.TokenCount);
             }
 
             reader.ReadBlockEnd(end);
@@ -218,7 +300,10 @@ public sealed class CharacterFile
                 for (var i = 0; i < 3; i++)
                     reader.Skip(16);
                 break;
-            case TeleportBlockId or MarkerBlockId when version == 1:
+            case TeleportBlockId when version == 1:
+                ReadWaypoints(reader);
+                break;
+            case MarkerBlockId when version == 1:
                 ReadUidLists(reader, 3);
                 break;
             case ShrineBlockId when version == 2:
@@ -299,14 +384,19 @@ public sealed class CharacterFile
 
         reader.ReadBool();
         reader.ReadBool();
-        reader.ReadByte();
-        reader.ReadByte();
+        var difficultyOffset = reader.Position;
+        var difficulty = reader.ReadByte();
+        var greatestOffset = reader.Position;
+        var greatest = reader.ReadByte();
         var moneyOffset = reader.Position;
         var money = reader.ReadUInt32();
+        int? tributesOffset = null;
+        uint? tributes = null;
         if (version >= 4)
         {
             reader.ReadByte();
-            reader.ReadUInt32();
+            tributesOffset = reader.Position;
+            tributes = reader.ReadUInt32();
         }
 
         reader.ReadByte();
@@ -325,6 +415,9 @@ public sealed class CharacterFile
             throw new InvalidDataException("Character info block has an unknown layout.");
 
         (MoneyOffset, Money) = (moneyOffset, money);
+        (DifficultyOffset, Difficulty) = (difficultyOffset, difficulty);
+        (GreatestDifficultyOffset, GreatestDifficulty) = (greatestOffset, greatest);
+        (TributesOffset, Tributes) = (tributesOffset, tributes);
     }
 
     /// <summary>
@@ -336,6 +429,7 @@ public sealed class CharacterFile
     private void ReadBio(GdcReader reader, int end)
     {
         reader.ReadInt32(); // version
+        var statsOffset = reader.Position;
         var stats = new CharacterStats(
             Level: reader.ReadInt32(),
             Experience: reader.ReadUInt32(),
@@ -350,7 +444,7 @@ public sealed class CharacterFile
             Energy: reader.ReadSingle());
 
         if (reader.Position == end)
-            Stats = stats;
+            (Stats, StatsOffset) = (stats, statsOffset);
     }
 
     #endregion
@@ -406,9 +500,11 @@ public sealed class CharacterFile
                     layouts.Add(layout);
                 }
 
-                if (TryReadEquipment(reader, end, extraFields) is { } equipment)
+                var slotLayouts = new List<SlotTokenLayout>(ArmorSlotCount + 4);
+                if (TryReadEquipment(reader, end, extraFields, slotLayouts) is { } equipment)
                 {
                     _bagLayouts = layouts;
+                    _slotLayouts = slotLayouts;
                     _itemExtraFields = extraFields;
                     Equipment = equipment;
                     Inventory = new CharacterInventory(bags, focusedBag, selectedBag);
@@ -425,7 +521,7 @@ public sealed class CharacterFile
     }
 
     /// <summary>Extra int32 fields per item to try, the one known for <paramref name="version"/> first.</summary>
-    private static IEnumerable<int> ExtraItemFieldCandidates(int version)
+    internal static IEnumerable<int> ExtraItemFieldCandidates(int version)
     {
         var expected = version >= 11 ? 4 : 0;
         yield return expected;
@@ -469,24 +565,25 @@ public sealed class CharacterFile
     }
 
     /// <summary>The equipment read with <paramref name="extraFields"/> extra fields per item, or <c>null</c> when that does not fit.</summary>
-    private static CharacterEquipment? TryReadEquipment(GdcReader reader, int end, int extraFields)
+    /// <remarks>Where every slot's values are (indices only meaningful when recording) goes into <paramref name="layouts"/>.</remarks>
+    private static CharacterEquipment? TryReadEquipment(GdcReader reader, int end, int extraFields, List<SlotTokenLayout> layouts)
     {
         var items = new List<EquippedItem>();
         var useAlternate = reader.ReadBool();
         for (var i = 0; i < ArmorSlotCount; i++)
         {
-            if (!TryAddEquipped(items, (EquipmentSlot)i, 0, reader, extraFields))
+            if (!TryAddEquipped(items, layouts, (EquipmentSlot)i, 0, reader, extraFields))
                 return null;
         }
 
         var set1IsAlternate = reader.ReadBool();
-        if (!TryAddEquipped(items, EquipmentSlot.MainHand, 1, reader, extraFields)
-            || !TryAddEquipped(items, EquipmentSlot.OffHand, 1, reader, extraFields))
+        if (!TryAddEquipped(items, layouts, EquipmentSlot.MainHand, 1, reader, extraFields)
+            || !TryAddEquipped(items, layouts, EquipmentSlot.OffHand, 1, reader, extraFields))
             return null;
 
         var set2IsAlternate = reader.ReadBool();
-        if (!TryAddEquipped(items, EquipmentSlot.MainHand, 2, reader, extraFields)
-            || !TryAddEquipped(items, EquipmentSlot.OffHand, 2, reader, extraFields))
+        if (!TryAddEquipped(items, layouts, EquipmentSlot.MainHand, 2, reader, extraFields)
+            || !TryAddEquipped(items, layouts, EquipmentSlot.OffHand, 2, reader, extraFields))
             return null;
 
         if (reader.Position != end)
@@ -499,10 +596,14 @@ public sealed class CharacterFile
     }
 
     /// <summary>Reads one slot; <c>false</c> when it does not look like an item (the field count is wrong).</summary>
-    private static bool TryAddEquipped(List<EquippedItem> items, EquipmentSlot slot, int weaponSet, GdcReader reader, int extraFields)
+    private static bool TryAddEquipped(
+        List<EquippedItem> items, List<SlotTokenLayout> layouts, EquipmentSlot slot, int weaponSet, GdcReader reader, int extraFields)
     {
+        var start = reader.TokenCount;
         var item = ReadItem(reader, extraFields);
+        var attachedToken = reader.TokenCount;
         var attached = reader.ReadBool();
+        layouts.Add(new SlotTokenLayout(slot, weaponSet, start, attachedToken, attachedToken));
         if (!item.IsEmpty && !IsItemRecord(item))
             return false;
 
@@ -511,7 +612,7 @@ public sealed class CharacterFile
         return true;
     }
 
-    private static bool IsItemRecord(SaveItem item) =>
+    internal static bool IsItemRecord(SaveItem item) =>
         item.BaseRecord.StartsWith("records/", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
@@ -522,7 +623,7 @@ public sealed class CharacterFile
     /// [newer inventory versions: <paramref name="extraFields"/> x int32]
     /// </code>
     /// </summary>
-    private static SaveItem ReadItem(GdcReader reader, int extraFields)
+    internal static SaveItem ReadItem(GdcReader reader, int extraFields)
     {
         var item = new SaveItem(
             BaseRecord: reader.ReadString(),
@@ -554,38 +655,101 @@ public sealed class CharacterFile
     #region Blocks after the inventory
 
     /// <summary>
-    /// Character stash, version 6+: <c>int32 tabCount</c>, then a block (id 0) per tab:
-    /// <c>int32 width, int32 height, int32 count, count x (item, float x, float y)</c>, then int32 fields that are
-    /// zero in every known save (five in version 11).
+    /// Character stash, version 6+: <c>int32 tabCount</c>, then a tab (see <see cref="ReadStashTab"/>) per tab the
+    /// character bought.
     /// </summary>
     private void ReadStash(GdcReader reader)
     {
-        var tabs = ReadCount(reader);
-        for (var tab = 0; tab < tabs; tab++)
+        var count = ReadCount(reader);
+        var tabs = new List<StashTab>(count);
+        var layouts = new List<StashTabTokenLayout>(count);
+        for (var i = 0; i < count; i++)
         {
-            var (id, end) = reader.ReadBlockStart();
-            if (id != 0)
-                throw new InvalidDataException($"Unexpected block {id} in the stash.");
+            var (tab, layout) = ReadStashTab(reader, _itemExtraFields);
+            tabs.Add(tab);
+            layouts.Add(layout);
+        }
 
-            reader.ReadUInt32(); // width
-            reader.ReadUInt32(); // height
+        Stash = new CharacterStash(tabs);
+        _stashTabs = layouts;
+    }
+
+    /// <summary>
+    /// A stash tab, in the character stash and in the transfer stash: a block (id 0) with
+    /// <c>int32 width, int32 height, int32 count, count x (item, float x, float y)</c>, then int32 fields that are zero
+    /// in every known save (five in version 11). The zeros are kept as they are when the tab is written again.
+    /// </summary>
+    internal static (StashTab Tab, StashTabTokenLayout Layout) ReadStashTab(GdcReader reader, int extraFields)
+    {
+        var start = reader.TokenCount;
+        var (id, end) = reader.ReadBlockStart();
+        if (id != 0)
+            throw new InvalidDataException($"Unexpected block {id} in the stash.");
+
+        var width = reader.ReadInt32();
+        var height = reader.ReadInt32();
+        if (width is < 1 or > 100 || height is < 1 or > 100)
+            throw new InvalidDataException($"A stash tab has an invalid size ({width} x {height}).");
+
+        var countToken = reader.TokenCount;
+        var count = ReadCount(reader);
+        var items = new List<StashItem>(count);
+        var itemLayouts = new List<ItemTokenLayout>(count);
+        for (var i = 0; i < count; i++)
+        {
+            var itemStart = reader.TokenCount;
+            var item = ReadItem(reader, extraFields);
+            var xToken = reader.TokenCount;
+            var x = reader.ReadSingle();
+            var yToken = reader.TokenCount;
+            var y = reader.ReadSingle();
+            if (!IsItemRecord(item) || !IsCell(x) || !IsCell(y))
+                throw new InvalidDataException("A stash item does not fit the item layout.");
+            items.Add(new StashItem(item, x, y));
+            itemLayouts.Add(new ItemTokenLayout(itemStart, reader.TokenCount, xToken, yToken));
+        }
+
+        var itemsEnd = reader.TokenCount;
+        while (reader.Position < end)
+        {
+            if (end - reader.Position < 4 || reader.ReadUInt32() != 0)
+                throw new InvalidDataException("The stash has data this editor does not know.");
+        }
+
+        var endToken = reader.TokenCount;
+        reader.ReadBlockEnd(end);
+        return (new StashTab(width, height, items), new StashTabTokenLayout(start, countToken, itemsEnd, endToken, itemLayouts));
+    }
+
+    private static bool IsCell(float value) => float.IsFinite(value) && value is >= 0 and <= 1000;
+
+    /// <summary>
+    /// Waypoints (block 6, version 1): for Normal, Elite and Ultimate <c>int32 count, count x 16-byte id</c> of the
+    /// rift gates unlocked in that difficulty (see <c>GameWaypoint.Uid</c>).
+    /// </summary>
+    private void ReadWaypoints(GdcReader reader)
+    {
+        var lists = new List<IReadOnlyList<string>>(CharacterWaypoints.DifficultyCount);
+        var layouts = new List<UidListTokenLayout>(CharacterWaypoints.DifficultyCount);
+        Span<byte> uid = stackalloc byte[16];
+        for (var list = 0; list < CharacterWaypoints.DifficultyCount; list++)
+        {
+            var countToken = reader.TokenCount;
             var count = ReadCount(reader);
+            var uids = new List<string>(count);
             for (var i = 0; i < count; i++)
             {
-                if (!IsItemRecord(ReadItem(reader, _itemExtraFields)))
-                    throw new InvalidDataException("A stash item does not fit the item layout.");
-                reader.ReadSingle();
-                reader.ReadSingle();
+                for (var b = 0; b < uid.Length; b++)
+                    uid[b] = reader.ReadByte();
+                uids.Add(Convert.ToHexStringLower(uid));
             }
 
-            while (reader.Position < end)
-            {
-                if (end - reader.Position < 4 || reader.ReadUInt32() != 0)
-                    throw new InvalidDataException("The stash has data this editor does not know.");
-            }
-
-            reader.ReadBlockEnd(end);
+            lists.Add(uids);
+            layouts.Add(new UidListTokenLayout(countToken, reader.TokenCount));
         }
+
+        Waypoints = new CharacterWaypoints(lists);
+        _teleportLists = layouts;
     }
 
     /// <summary><paramref name="lists"/> x (int32 count, count x 16-byte id): respawn points, waypoints, markers, shrines.</summary>
@@ -645,19 +809,33 @@ public sealed class CharacterFile
             throw new InvalidDataException("The skills have data this editor does not know.");
     }
 
-    /// <summary><c>int32 faction, int32 count, count x (bool modified, bool unlocked, float value, float positiveBoost, float negativeBoost)</c>.</summary>
-    private static void ReadFactions(GdcReader reader)
+    /// <summary>
+    /// Factions (block 13, version 5):
+    /// <c>int32 faction, int32 count, count x (bool modified, bool unlocked, float value, float positiveBoost, float negativeBoost)</c>.
+    /// Every entry has the same size, so a value can be changed in place.
+    /// </summary>
+    private void ReadFactions(GdcReader reader)
     {
         reader.ReadUInt32();
         var count = ReadCount(reader);
+        var factions = new List<FactionStanding>(count);
+        var offsets = new List<FactionValueOffsets>(count);
         for (var i = 0; i < count; i++)
         {
-            reader.ReadBool();
-            reader.ReadBool();
-            reader.ReadSingle();
-            reader.ReadSingle();
-            reader.ReadSingle();
+            var modifiedOffset = reader.Position;
+            var modified = reader.ReadBool();
+            var unlockedOffset = reader.Position;
+            var unlocked = reader.ReadBool();
+            var valueOffset = reader.Position;
+            var value = reader.ReadSingle();
+            var positiveBoost = reader.ReadSingle();
+            var negativeBoost = reader.ReadSingle();
+            factions.Add(new FactionStanding(i, modified, unlocked, value, positiveBoost, negativeBoost));
+            offsets.Add(new FactionValueOffsets(modifiedOffset, unlockedOffset, valueOffset));
         }
+
+        Factions = new CharacterFactions(factions);
+        FactionOffsets = offsets;
     }
 
     /// <summary>
@@ -758,7 +936,7 @@ public sealed class CharacterFile
             reader.ReadString();
     }
 
-    private static int ReadCount(GdcReader reader)
+    internal static int ReadCount(GdcReader reader)
     {
         var count = reader.ReadInt32();
         if (count is < 0 or > MaxCount)
@@ -780,3 +958,37 @@ public sealed record BagTokenLayout(int Start, int CountToken, int EndToken, IRe
 
 /// <summary>Values of the inventory block: its length, its end marker and its bags (stored one after another).</summary>
 public sealed record InventoryTokenLayout(int LengthToken, int EndToken, IReadOnlyList<BagTokenLayout> Bags);
+
+/// <summary>
+/// Values of one equipment slot in <see cref="CharacterFile.Tokens"/>: the item at <c>[Start, End)</c> (an empty item
+/// in an empty slot), then the "attached" flag at <c>AttachedToken</c>.
+/// </summary>
+public sealed record SlotTokenLayout(EquipmentSlot Slot, int WeaponSet, int Start, int End, int AttachedToken);
+
+/// <summary>
+/// Values of one stash tab in <see cref="CharacterFile.Tokens"/>: id at <c>Start</c>, length at <c>Start + 1</c>, width
+/// and height, the item count at <c>CountToken</c>, the items, the zero fields from <c>ItemsEnd</c> and the end marker at
+/// <c>EndToken</c>. The x and y of every item are floats.
+/// </summary>
+public sealed record StashTabTokenLayout(int Start, int CountToken, int ItemsEnd, int EndToken, IReadOnlyList<ItemTokenLayout> Items);
+
+/// <summary>Values of the stash block (4): its length, its end marker and its tabs (stored one after another).</summary>
+public sealed record StashTokenLayout(int LengthToken, int EndToken, IReadOnlyList<StashTabTokenLayout> Tabs);
+
+/// <summary>File offsets of the "modified" and "unlocked" flags and of the value of one faction (block 13).</summary>
+public sealed record FactionValueOffsets(int Modified, int Unlocked, int Value);
+
+/// <summary>Values of one list of 16-byte ids: the count at <c>CountToken</c>, the ids' bytes up to <c>End</c> (exclusive).</summary>
+public sealed record UidListTokenLayout(int CountToken, int End);
+
+/// <summary>
+/// Values of the waypoint block (6): its length, its end marker and its three lists (Normal, Elite, Ultimate), stored
+/// one after another.
+/// </summary>
+public sealed record WaypointTokenLayout(int LengthToken, int EndToken, IReadOnlyList<UidListTokenLayout> Lists);
+
+/// <summary>
+/// Values of the equipment: the inventory block's length and end marker (the equipment is stored at its end) and the
+/// 16 slots in the file's order.
+/// </summary>
+public sealed record EquipmentTokenLayout(int LengthToken, int EndToken, IReadOnlyList<SlotTokenLayout> Slots);
