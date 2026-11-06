@@ -95,9 +95,16 @@ public sealed class CharacterFile
     /// </summary>
     public InventoryTokenLayout? InventoryLayout { get; private set; }
 
+    /// <summary>
+    /// Where the 16 equipment slots are in <see cref="Tokens"/>, to write other items into them; <c>null</c> unless read
+    /// with <c>recordTokens</c> and the inventory has items.
+    /// </summary>
+    public EquipmentTokenLayout? EquipmentLayout { get; private set; }
+
     private int _inventoryLengthToken = -1;
     private int _inventoryEndToken = -1;
     private List<BagTokenLayout>? _bagLayouts;
+    private List<SlotTokenLayout>? _slotLayouts;
 
     /// <summary>Reads a character file.</summary>
     /// <param name="recordTokens">Keep every value (<see cref="Tokens"/>) to encrypt the file again.</param>
@@ -145,6 +152,9 @@ public sealed class CharacterFile
         if (recordTokens && file.RewriteError is null && file._bagLayouts is { Count: > 0 } bags
             && file._inventoryLengthToken >= 0 && file._inventoryEndToken >= 0)
             file.InventoryLayout = new InventoryTokenLayout(file._inventoryLengthToken, file._inventoryEndToken, bags);
+        if (recordTokens && file.RewriteError is null && file._slotLayouts is { Count: > 0 } slots
+            && file._inventoryLengthToken >= 0 && file._inventoryEndToken >= 0)
+            file.EquipmentLayout = new EquipmentTokenLayout(file._inventoryLengthToken, file._inventoryEndToken, slots);
         return file;
     }
 
@@ -406,9 +416,11 @@ public sealed class CharacterFile
                     layouts.Add(layout);
                 }
 
-                if (TryReadEquipment(reader, end, extraFields) is { } equipment)
+                var slotLayouts = new List<SlotTokenLayout>(ArmorSlotCount + 4);
+                if (TryReadEquipment(reader, end, extraFields, slotLayouts) is { } equipment)
                 {
                     _bagLayouts = layouts;
+                    _slotLayouts = slotLayouts;
                     _itemExtraFields = extraFields;
                     Equipment = equipment;
                     Inventory = new CharacterInventory(bags, focusedBag, selectedBag);
@@ -469,24 +481,25 @@ public sealed class CharacterFile
     }
 
     /// <summary>The equipment read with <paramref name="extraFields"/> extra fields per item, or <c>null</c> when that does not fit.</summary>
-    private static CharacterEquipment? TryReadEquipment(GdcReader reader, int end, int extraFields)
+    /// <remarks>Where every slot's values are (indices only meaningful when recording) goes into <paramref name="layouts"/>.</remarks>
+    private static CharacterEquipment? TryReadEquipment(GdcReader reader, int end, int extraFields, List<SlotTokenLayout> layouts)
     {
         var items = new List<EquippedItem>();
         var useAlternate = reader.ReadBool();
         for (var i = 0; i < ArmorSlotCount; i++)
         {
-            if (!TryAddEquipped(items, (EquipmentSlot)i, 0, reader, extraFields))
+            if (!TryAddEquipped(items, layouts, (EquipmentSlot)i, 0, reader, extraFields))
                 return null;
         }
 
         var set1IsAlternate = reader.ReadBool();
-        if (!TryAddEquipped(items, EquipmentSlot.MainHand, 1, reader, extraFields)
-            || !TryAddEquipped(items, EquipmentSlot.OffHand, 1, reader, extraFields))
+        if (!TryAddEquipped(items, layouts, EquipmentSlot.MainHand, 1, reader, extraFields)
+            || !TryAddEquipped(items, layouts, EquipmentSlot.OffHand, 1, reader, extraFields))
             return null;
 
         var set2IsAlternate = reader.ReadBool();
-        if (!TryAddEquipped(items, EquipmentSlot.MainHand, 2, reader, extraFields)
-            || !TryAddEquipped(items, EquipmentSlot.OffHand, 2, reader, extraFields))
+        if (!TryAddEquipped(items, layouts, EquipmentSlot.MainHand, 2, reader, extraFields)
+            || !TryAddEquipped(items, layouts, EquipmentSlot.OffHand, 2, reader, extraFields))
             return null;
 
         if (reader.Position != end)
@@ -499,10 +512,14 @@ public sealed class CharacterFile
     }
 
     /// <summary>Reads one slot; <c>false</c> when it does not look like an item (the field count is wrong).</summary>
-    private static bool TryAddEquipped(List<EquippedItem> items, EquipmentSlot slot, int weaponSet, GdcReader reader, int extraFields)
+    private static bool TryAddEquipped(
+        List<EquippedItem> items, List<SlotTokenLayout> layouts, EquipmentSlot slot, int weaponSet, GdcReader reader, int extraFields)
     {
+        var start = reader.TokenCount;
         var item = ReadItem(reader, extraFields);
+        var attachedToken = reader.TokenCount;
         var attached = reader.ReadBool();
+        layouts.Add(new SlotTokenLayout(slot, weaponSet, start, attachedToken, attachedToken));
         if (!item.IsEmpty && !IsItemRecord(item))
             return false;
 
@@ -780,3 +797,15 @@ public sealed record BagTokenLayout(int Start, int CountToken, int EndToken, IRe
 
 /// <summary>Values of the inventory block: its length, its end marker and its bags (stored one after another).</summary>
 public sealed record InventoryTokenLayout(int LengthToken, int EndToken, IReadOnlyList<BagTokenLayout> Bags);
+
+/// <summary>
+/// Values of one equipment slot in <see cref="CharacterFile.Tokens"/>: the item at <c>[Start, End)</c> (an empty item
+/// in an empty slot), then the "attached" flag at <c>AttachedToken</c>.
+/// </summary>
+public sealed record SlotTokenLayout(EquipmentSlot Slot, int WeaponSet, int Start, int End, int AttachedToken);
+
+/// <summary>
+/// Values of the equipment: the inventory block's length and end marker (the equipment is stored at its end) and the
+/// 16 slots in the file's order.
+/// </summary>
+public sealed record EquipmentTokenLayout(int LengthToken, int EndToken, IReadOnlyList<SlotTokenLayout> Slots);

@@ -756,13 +756,13 @@ public sealed partial class ItemBuilderViewModel : ViewModelBase
     [RelayCommand]
     private void Cancel() => CloseRequested?.Invoke(this, null);
 
-    /// <summary>The builder edits an item of a bag, which can be removed.</summary>
+    /// <summary>The builder edits an item of a bag or an equipment slot, which can be removed.</summary>
     public bool CanRemove { get; }
 
     [RelayCommand(CanExecute = nameof(CanRemove))]
     private void Remove()
     {
-        if (!_confirm("Remove item", "Remove this item from the bag? It is deleted from the save file when you save the character."))
+        if (!_confirm("Remove item", "Remove this item from the character? It is deleted from the save file when you save the character."))
             return;
 
         RemoveRequested?.Invoke(this, EventArgs.Empty);

@@ -79,9 +79,20 @@
                 </DataTemplate.Triggers>
             </DataTemplate>
 
+            <!--
+                A slot of the equipment screen. While the equipment can be changed, a click opens the item inspector on
+                the slot (change or take off its item, or build one for an empty slot); a right-click opens its menu.
+            -->
             <Style x:Key="SlotStyle" TargetType="ContentControl">
                 <Setter Property="ContentTemplate" Value="{StaticResource EquipmentSlotTemplate}" />
                 <Setter Property="Focusable" Value="False" />
+                <EventSetter Event="MouseLeftButtonUp" Handler="OnSlotMouseLeftButtonUp" />
+                <EventSetter Event="MouseRightButtonUp" Handler="OnSlotMouseRightButtonUp" />
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding DataContext.CanEditItems, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="True">
+                        <Setter Property="Cursor" Value="Hand" />
+                    </DataTrigger>
+                </Style.Triggers>
             </Style>
 
             <!-- Swap button of the weapon sets, styled like a small slot. -->
@@ -229,6 +240,19 @@
                                                FontSize="12"
                                                TextAlignment="Center"
                                                Foreground="#D9B45A" />
+                                    <!-- Puts every slot back as the save file has it (shown while a slot changed). -->
+                                    <Button Margin="0,10,0,0"
+                                            HorizontalAlignment="Center"
+                                            Style="{StaticResource SubtleIconButtonStyle}"
+                                            ToolTip="Undo all changes to the equipment (equipped, changed and removed items)"
+                                            AutomationProperties.Name="Undo equipment changes"
+                                            Command="{Binding ResetEquipmentCommand}"
+                                            Visibility="{Binding HasChanges, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <wpf:MaterialIcon Kind="Undo" Width="16" Height="16" Foreground="#D9B45A" />
+                                            <TextBlock Text="Undo equipment changes" Margin="6,0,0,0" FontSize="11" VerticalAlignment="Center" Foreground="#D9B45A" />
+                                        </StackPanel>
+                                    </Button>
                                     <TextBlock Text="Reading item names and icons…"
                                                Margin="0,6,0,0"
                                                FontSize="11"
@@ -283,5 +307,25 @@
                 </StackPanel>
             </Border>
         </WrapPanel>
+
+        <!-- What the last change could not do (an item that does not fit the slot). -->
+        <TextBlock Margin="0,0,0,12"
+                   MaxWidth="700"
+                   HorizontalAlignment="Left"
+                   FontSize="11"
+                   TextWrapping="Wrap"
+                   Text="{Binding StatusMessage}"
+                   Foreground="{DynamicResource WarningForegroundBrush}"
+                   Visibility="{Binding HasStatusMessage, Converter={StaticResource BooleanToVisibilityConverter}}" />
+
+        <!-- Why the equipment cannot be changed. -->
+        <TextBlock Margin="0,0,0,12"
+                   MaxWidth="700"
+                   HorizontalAlignment="Left"
+                   FontSize="11"
+                   TextWrapping="Wrap"
+                   Text="{Binding EditHint}"
+                   Foreground="{DynamicResource WarningForegroundBrush}"
+                   Visibility="{Binding HasEditHint, Converter={StaticResource BooleanToVisibilityConverter}}" />
     </StackPanel>
 </UserControl>

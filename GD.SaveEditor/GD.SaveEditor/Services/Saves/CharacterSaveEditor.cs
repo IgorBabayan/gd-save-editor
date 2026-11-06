@@ -6,8 +6,8 @@ namespace GD.SaveEditor.Services.Saves;
 /// <summary>
 /// Writes changes into the bytes of a character file. Every value of a <c>player.gdc</c> moves the encryption key on,
 /// so one changed value changes the encrypted bytes of everything after it: the file is read value by value
-/// (<see cref="CharacterFile"/>), the values are changed (the iron bits) or rebuilt (the bag blocks, when items were moved, added, changed or removed)
-/// and the whole file is encrypted again (<see cref="GdcWriter"/>). The result is read back before it is returned: it
+/// (<see cref="CharacterFile"/>), the values are changed (the iron bits) or rebuilt (the bag blocks, when items were moved, added, changed or removed;
+/// the equipment slots, when items were equipped, changed or taken off) and the whole file is encrypted again (<see cref="GdcWriter"/>). The result is read back before it is returned: it
 /// must hold exactly the values that were meant to be written.
 /// </summary>
 public sealed class CharacterSaveEditor : ICharacterSaveEditor
@@ -32,8 +32,28 @@ public sealed class CharacterSaveEditor : ICharacterSaveEditor
             tokens[index] = tokens[index] with { Value = money };
         }
 
+        // The equipment is stored after the bags, so it is replaced first: the bags' indices stay valid. The inventory
+        // block that holds both grows or shrinks by what they changed.
+        var inventoryDelta = 0;
+        int? inventoryLengthToken = null, inventoryEndToken = null;
+        if (changes.Equipment is { Count: > 0 } equipment)
+        {
+            if (original.EquipmentLayout is not { } equipmentLayout)
+                throw new InvalidDataException("The equipment could not be found in the save file.");
+            inventoryDelta += ReplaceEquipment(tokens, original, equipmentLayout, equipment);
+            (inventoryLengthToken, inventoryEndToken) = (equipmentLayout.LengthToken, equipmentLayout.EndToken);
+        }
+
         if (changes.Bags is { } bags)
-            RebuildBags(tokens, original, bags);
+        {
+            if (original.InventoryLayout is not { } layout)
+                throw new InvalidDataException("The bags could not be found in the save file.");
+            inventoryDelta += RebuildBags(tokens, original, layout, bags);
+            (inventoryLengthToken, inventoryEndToken) = (layout.LengthToken, layout.EndToken);
+        }
+
+        if (inventoryLengthToken is { } lengthToken && inventoryEndToken is { } endToken)
+            tokens[lengthToken] = tokens[lengthToken] with { Value = SizeOf(tokens, lengthToken + 1, endToken + inventoryDelta) };
 
         var data = GdcWriter.EncodeSequence(character.RawData, tokens);
         Verify(tokens, CharacterFile.Read(data, recordTokens: true));
@@ -41,15 +61,52 @@ public sealed class CharacterSaveEditor : ICharacterSaveEditor
     }
 
     /// <summary>
+    /// Writes the items of <paramref name="changes"/> into their equipment slots: the slot's item values are replaced
+    /// (<see cref="AddItem"/>; an empty item for a slot that is emptied) and its "attached" flag is set as the game sets
+    /// it (1 with an item, 0 without). Returns how many values the inventory block gained (negative: lost).
+    /// </summary>
+    private static int ReplaceEquipment(
+        List<GdcToken> tokens, CharacterFile original, EquipmentTokenLayout layout, IReadOnlyList<EquipmentChange> changes)
+    {
+        var slots = new List<(SlotTokenLayout Slot, SaveItem? Item)>(changes.Count);
+        foreach (var change in changes)
+        {
+            var slot = layout.Slots.FirstOrDefault(s => s.Slot == change.Slot && s.WeaponSet == change.WeaponSet)
+                       ?? throw new InvalidDataException($"The save file has no {change.Slot} slot for weapon set {change.WeaponSet}.");
+            if (slots.Any(s => ReferenceEquals(s.Slot, slot)))
+                throw new InvalidDataException($"The {change.Slot} slot was changed twice.");
+            if (change.Item is { IsEmpty: true })
+                throw new InvalidDataException("An equipped item has no record.");
+            slots.Add((slot, change.Item));
+        }
+
+        // From the last slot to the first, so the indices of the slots not replaced yet stay valid.
+        var delta = 0;
+        foreach (var (slot, item) in slots.OrderByDescending(s => s.Slot.Start))
+        {
+            var values = new List<GdcToken>();
+            // An empty slot holds an empty item: no records, zeros, a stack of one (as the game writes it).
+            AddItem(values, (item ?? SaveItem.Create(string.Empty, 0)).WithExtraFieldCount(original.ItemExtraFields));
+
+            tokens[slot.AttachedToken] = tokens[slot.AttachedToken] with { Value = item is null ? 0u : 1u };
+            tokens.RemoveRange(slot.Start, slot.End - slot.Start);
+            tokens.InsertRange(slot.Start, values);
+            delta += values.Count - (slot.End - slot.Start);
+        }
+
+        return delta;
+    }
+
+    /// <summary>
     /// Replaces the bag blocks in <paramref name="tokens"/> with blocks holding the items as placed in
     /// <paramref name="bags"/>. An unchanged item keeps all its values (only its x and y change); a changed or new item
     /// is written value by value (<see cref="AddItem"/>); an item of the file that is not placed is left out (removed).
-    /// The lengths of the bag blocks and of the inventory block are computed again.
+    /// The lengths of the bag blocks are computed again; returns how many values the inventory block gained (negative:
+    /// lost), for its length.
     /// </summary>
-    private static void RebuildBags(List<GdcToken> tokens, CharacterFile original, IReadOnlyList<IReadOnlyList<PlacedItem>> bags)
+    private static int RebuildBags(
+        List<GdcToken> tokens, CharacterFile original, InventoryTokenLayout layout, IReadOnlyList<IReadOnlyList<PlacedItem>> bags)
     {
-        if (original.InventoryLayout is not { } layout)
-            throw new InvalidDataException("The bags could not be found in the save file.");
         if (bags.Count != layout.Bags.Count)
             throw new InvalidDataException($"The save file has {layout.Bags.Count} bags, not {bags.Count}.");
 
@@ -107,8 +164,7 @@ public sealed class CharacterSaveEditor : ICharacterSaveEditor
         tokens.InsertRange(first, segment);
 
         // The inventory block grows or shrinks with its bags (items added or removed, or changed in length).
-        var inventoryEnd = layout.EndToken - count + segment.Count;
-        tokens[layout.LengthToken] = tokens[layout.LengthToken] with { Value = SizeOf(tokens, layout.LengthToken + 1, inventoryEnd) };
+        return segment.Count - count;
     }
 
     /// <summary>

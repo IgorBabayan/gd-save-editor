@@ -447,7 +447,7 @@
                                 <wpf:MaterialIcon Width="16" Height="16" Kind="ArrowExpand" />
                             </Button>
                             <Button Style="{StaticResource SubtleIconButtonStyle}"
-                                    ToolTip="Remove this item from the bag"
+                                    ToolTip="Remove this item from the character"
                                     AutomationProperties.Name="Remove item"
                                     Command="{Binding RemoveCommand}"
                                     Visibility="{Binding CanRemove, Converter={StaticResource BooleanToVisibilityConverter}}">

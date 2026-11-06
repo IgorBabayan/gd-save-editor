@@ -42,14 +42,7 @@ public partial class MainWindow : Window
 
     private void OnCloseExecuted(object sender, ExecutedRoutedEventArgs e) => SystemCommands.CloseWindow(this);
 
-    /// <summary>The middle caption button: Maximize, or Restore Down while maximized.</summary>
-    private void OnMaximizeRestoreClick(object sender, RoutedEventArgs e)
-    {
-        if (WindowState == WindowState.Maximized)
-            SystemCommands.RestoreWindow(this);
-        else
-            SystemCommands.MaximizeWindow(this);
-    }
+    // The Maximize caption button is always disabled: the window has a fixed size (ResizeMode="NoResize").
 
     #endregion
 

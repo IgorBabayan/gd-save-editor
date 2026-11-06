@@ -24,15 +24,24 @@ public sealed record PlacedItem(int FromBag, int FromIndex, int X, int Y, SaveIt
     public static PlacedItem Create(SaveItem item, int x, int y) => new(New, New, x, y, item);
 }
 
+/// <summary>An equipment slot that gets another item, or is emptied.</summary>
+/// <param name="WeaponSet">1 or 2 for the weapon slots, 0 for armor and jewelry.</param>
+/// <param name="Item">The item to put in the slot; <c>null</c> empties it.</param>
+public sealed record EquipmentChange(EquipmentSlot Slot, int WeaponSet, SaveItem? Item);
+
 /// <summary>Changes made in the editor to one character; <c>null</c> values stay as they are in the file.</summary>
 /// <param name="Money">New amount of iron bits.</param>
 /// <param name="Bags">
 /// New contents of every bag, in bag order. Each item of the save file is placed at most once; one that is not placed
 /// is removed from the character. New items (<see cref="PlacedItem.IsNew"/>) are added.
 /// </param>
-public sealed record CharacterChanges(uint? Money = null, IReadOnlyList<IReadOnlyList<PlacedItem>>? Bags = null)
+/// <param name="Equipment">Equipment slots that get another item or are emptied; the other slots stay as they are.</param>
+public sealed record CharacterChanges(
+    uint? Money = null,
+    IReadOnlyList<IReadOnlyList<PlacedItem>>? Bags = null,
+    IReadOnlyList<EquipmentChange>? Equipment = null)
 {
-    public bool IsEmpty => Money is null && Bags is null;
+    public bool IsEmpty => Money is null && Bags is null && Equipment is not { Count: > 0 };
 }
 
 public interface ICharacterSaveEditor

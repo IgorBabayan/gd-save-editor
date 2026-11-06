@@ -20,8 +20,8 @@
 
     <!--
         WindowChrome removes the native title bar but keeps native behaviour, like any Windows window:
-        Aero Snap, drag to move, double-click the title bar to maximize / restore, Alt+Space menu, resizing at the edges.
-        Minimize / Maximize-Restore / Close are drawn in the title bar (see MainWindow.xaml.cs).
+        drag to move, Alt+Space menu. The window has a fixed size (ResizeMode="NoResize"): it cannot be resized or maximized.
+        Minimize / Maximize / Close are drawn in the title bar; Maximize is shown disabled, as Windows does for such windows.
     -->
     <shell:WindowChrome.WindowChrome>
         <shell:WindowChrome CaptionHeight="32"
@@ -331,24 +331,14 @@
                             ToolTip="Minimize"
                             Content="&#xE921;"
                             Command="{x:Static SystemCommands.MinimizeWindowCommand}" />
-                    <!-- Maximize, or Restore while maximized (glyph and tooltip follow the window state, as in Windows). -->
-                    <Button x:Name="MaximizeRestoreButton"
-                            Click="OnMaximizeRestoreClick">
-                        <Button.Style>
-                            <Style TargetType="Button" BasedOn="{StaticResource CaptionButtonStyle}">
-                                <Setter Property="Content" Value="&#xE922;" />
-                                <Setter Property="ToolTip" Value="Maximize" />
-                                <Setter Property="AutomationProperties.Name" Value="Maximize" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding WindowState, RelativeSource={RelativeSource AncestorType=Window}}" Value="Maximized">
-                                        <Setter Property="Content" Value="&#xE923;" />
-                                        <Setter Property="ToolTip" Value="Restore Down" />
-                                        <Setter Property="AutomationProperties.Name" Value="Restore Down" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Button.Style>
-                    </Button>
+                    <!-- Maximize: shown but always disabled, the window has a fixed size (as Windows does for such windows). -->
+                    <Button x:Name="MaximizeButton"
+                            Style="{StaticResource CaptionButtonStyle}"
+                            Content="&#xE922;"
+                            IsEnabled="False"
+                            ToolTip="Maximize"
+                            ToolTipService.ShowOnDisabled="True"
+                            AutomationProperties.Name="Maximize" />
                     <Button Style="{StaticResource CloseCaptionButtonStyle}"
                             ToolTip="Close"
                             Content="&#xE8BB;"
