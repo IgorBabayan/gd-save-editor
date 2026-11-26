@@ -1,0 +1,257 @@
+<UserControl x:Class="GD.SaveEditor.Presentation.Views.Characters.CharacterProfileView"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:charactersVm="using:GD.SaveEditor.Presentation.ViewModels.Characters"
+             xmlns:behaviors="using:GD.SaveEditor.Presentation.Behaviors"
+             xmlns:mi="using:Material.Icons.Avalonia"
+             mc:Ignorable="d"
+             x:DataType="charactersVm:CharacterProfileViewModel"
+             d:DesignHeight="600" d:DesignWidth="320">
+
+    <UserControl.Resources>
+        <!-- A value field: changed values are shown in the accent color, values that cannot be written get a red frame. -->
+        <ControlTheme x:Key="ProfileTextBoxStyle" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+            <Setter Property="MinHeight" Value="26" />
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Style Selector="^.readOnly">
+                <Setter Property="Foreground" Value="{DynamicResource SecondaryForegroundBrush}" />
+            </Style>
+            <Style Selector="^.changed">
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+            </Style>
+        </ControlTheme>
+
+        <ControlTheme x:Key="FieldLabelStyle" TargetType="TextBlock">
+            <Setter Property="Margin" Value="0,0,16,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Foreground" Value="{DynamicResource SecondaryForegroundBrush}" />
+        </ControlTheme>
+
+        <ControlTheme x:Key="FieldErrorStyle" TargetType="TextBlock">
+            <Setter Property="Margin" Value="0,2,0,0" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Foreground" Value="{DynamicResource ErrorForegroundBrush}" />
+        </ControlTheme>
+
+        <ControlTheme x:Key="SubHeaderStyle" TargetType="TextBlock">
+            <Setter Property="Margin" Value="0,14,0,4" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource WindowForegroundBrush}" />
+        </ControlTheme>
+
+        <!-- Undo button of a field (shown while it is changed). -->
+        <ControlTheme x:Key="FieldUndoButtonStyle" TargetType="Button" BasedOn="{StaticResource SubtleIconButtonStyle}">
+            <Setter Property="Margin" Value="0,0,4,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="ToolTip.Tip" Value="Undo the change (Esc)" />
+        </ControlTheme>
+
+        <!-- Number field: label, undo, value. The label column is shared, so every row lines up. -->
+        <DataTemplate x:Key="NumberFieldTemplate" DataType="charactersVm:NumberFieldViewModel">
+            <StackPanel Margin="0,3" IsVisible="{Binding IsAvailable}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" SharedSizeGroup="ProfileLabel" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="120" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding Label}" Theme="{StaticResource FieldLabelStyle}" />
+                    <Button Grid.Column="2"
+                            Theme="{StaticResource FieldUndoButtonStyle}"
+                            AutomationProperties.Name="{Binding Label, StringFormat='Undo {0}'}"
+                            Command="{Binding ResetCommand}"
+                            IsVisible="{Binding IsChanged}">
+                        <mi:MaterialIcon Kind="Undo" Width="14" Height="14" Foreground="{DynamicResource AccentBrush}" />
+                    </Button>
+                    <TextBox Grid.Column="3"
+                             Theme="{StaticResource ProfileTextBoxStyle}"
+                             Classes.changed="{Binding IsChanged}"
+                             Classes.error="{Binding HasError}"
+                             Classes.readOnly="{Binding IsReadOnly}"
+                             TextAlignment="Right"
+                             AutomationProperties.Name="{Binding Label}"
+                             Text="{Binding Text}"
+                             IsReadOnly="{Binding IsReadOnly, Mode=OneWay}"
+                             ToolTip.Tip="{Binding ToolTip}"
+                             behaviors:NumericInput.IsEnabled="True"
+                             behaviors:NumericInput.Maximum="{Binding Maximum}">
+                        <TextBox.KeyBindings>
+                        <KeyBinding Gesture="Escape" Command="{Binding ResetCommand}" />
+                    </TextBox.KeyBindings>
+                    </TextBox>
+                </Grid>
+                <TextBlock Text="{Binding Error}"
+                           Theme="{StaticResource FieldErrorStyle}"
+                           IsVisible="{Binding HasError}" />
+            </StackPanel>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Border MinWidth="300"
+            Padding="16,12"
+            VerticalAlignment="Top"
+            Theme="{StaticResource InventorySectionBorderStyle}"
+            MinHeight="0">
+        <StackPanel Grid.IsSharedSizeScope="True">
+            <DockPanel Margin="0,0,0,8" LastChildFill="False">
+                <TextBlock DockPanel.Dock="Left" Text="Character" Theme="{StaticResource SectionHeaderTextStyle}" />
+                <!-- Puts every value of the save file back (shown while one is changed). -->
+                <Button DockPanel.Dock="Right"
+                        Width="NaN"
+                        Theme="{StaticResource SubtleIconButtonStyle}"
+                        ToolTip.Tip="Undo all changes to the character (name, sex, difficulty, tributes, attributes and points)"
+                        AutomationProperties.Name="Undo character changes"
+                        Command="{Binding ResetAllCommand}"
+                        IsVisible="{Binding HasChanges}">
+                    <StackPanel Orientation="Horizontal" Margin="4,0">
+                        <mi:MaterialIcon Kind="Undo" Width="16" Height="16" Foreground="{DynamicResource AccentBrush}" />
+                        <TextBlock Text="Undo all" Margin="4,0,0,0" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource AccentBrush}" />
+                    </StackPanel>
+                </Button>
+            </DockPanel>
+
+            <!-- ===== Name ===== -->
+            <Grid Margin="0,3">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" SharedSizeGroup="ProfileLabel" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="Name" Theme="{StaticResource FieldLabelStyle}" />
+                <Button Grid.Column="1"
+                        Theme="{StaticResource FieldUndoButtonStyle}"
+                        AutomationProperties.Name="Undo name"
+                        Command="{Binding ResetNameCommand}"
+                        IsVisible="{Binding IsNameChanged}">
+                    <mi:MaterialIcon Kind="Undo" Width="14" Height="14" Foreground="{DynamicResource AccentBrush}" />
+                </Button>
+                <TextBox Grid.Column="2"
+                         MinWidth="160"
+                         MaxLength="{x:Static charactersVm:CharacterProfileViewModel.MaxNameLength}"
+                         AutomationProperties.Name="Name"
+                         Theme="{StaticResource ProfileTextBoxStyle}"
+                         Classes.changed="{Binding IsNameChanged}"
+                         Classes.error="{Binding HasNameError}"
+                         Classes.readOnly="{Binding IsHeaderReadOnly}"
+                         Text="{Binding NameText}"
+                         IsReadOnly="{Binding IsHeaderReadOnly, Mode=OneWay}"
+                         ToolTip.Tip="{Binding NameToolTip}">
+                    <TextBox.KeyBindings>
+                        <KeyBinding Gesture="Escape" Command="{Binding ResetNameCommand}" />
+                    </TextBox.KeyBindings>
+                </TextBox>
+            </Grid>
+            <TextBlock Text="{Binding NameError}"
+                       Theme="{StaticResource FieldErrorStyle}"
+                       IsVisible="{Binding HasNameError}" />
+
+            <!-- ===== Sex ===== -->
+            <Grid Margin="0,6,0,3">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" SharedSizeGroup="ProfileLabel" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="Sex" Theme="{StaticResource FieldLabelStyle}" />
+                <ListBox Grid.Column="1"
+                         Theme="{StaticResource PillListBoxStyle}"
+                         AutomationProperties.Name="Sex"
+                         ItemsSource="{Binding SexOptions}"
+                         SelectedItem="{Binding SelectedSex}"
+                         DisplayMemberBinding="{ReflectionBinding Label}"
+                         IsEnabled="{Binding CanEditHeader}"
+                         ToolTip.Tip="{Binding SexToolTip}"
+                         ToolTip.ShowOnDisabled="True" />
+            </Grid>
+
+            <!-- ===== Unlocked difficulty ===== -->
+            <Grid Margin="0,3" IsVisible="{Binding HasDifficulty}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" SharedSizeGroup="ProfileLabel" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="Unlocked difficulty" Theme="{StaticResource FieldLabelStyle}" />
+                <ListBox Grid.Column="1"
+                         Theme="{StaticResource PillListBoxStyle}"
+                         AutomationProperties.Name="Unlocked difficulty"
+                         ItemsSource="{Binding DifficultyOptions}"
+                         SelectedItem="{Binding SelectedDifficulty}"
+                         DisplayMemberBinding="{ReflectionBinding Label}"
+                         IsEnabled="{Binding CanEditDifficulty}"
+                         ToolTip.Tip="{Binding DifficultyToolTip}"
+                         ToolTip.ShowOnDisabled="True" />
+            </Grid>
+            <TextBlock Text="{Binding DifficultyHint}"
+                       Margin="0,2,0,0"
+                       FontSize="11"
+                       TextWrapping="Wrap"
+                       MaxWidth="320"
+                       HorizontalAlignment="Left"
+                       Foreground="{DynamicResource WarningForegroundBrush}"
+                       IsVisible="{Binding HasDifficultyHint}" />
+
+            <ContentControl Margin="0,3,0,0"
+                            Content="{Binding CrucibleTributes}"
+                            ContentTemplate="{StaticResource NumberFieldTemplate}"
+                            Focusable="False" />
+
+            <!-- ===== Attributes and unspent points ===== -->
+            <StackPanel IsVisible="{Binding HasStats}">
+                <TextBlock Text="Attributes" Theme="{StaticResource SubHeaderStyle}" />
+                <ItemsControl ItemsSource="{Binding Attributes}" ItemTemplate="{StaticResource NumberFieldTemplate}" Focusable="False" />
+
+                <TextBlock Text="Unspent points" Theme="{StaticResource SubHeaderStyle}" />
+                <ItemsControl ItemsSource="{Binding Points}" ItemTemplate="{StaticResource NumberFieldTemplate}" Focusable="False" />
+
+                <!-- Shown as the save file has them. -->
+                <ItemsControl Margin="0,12,0,0" ItemsSource="{Binding ReadOnlyStats}" Focusable="False">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="charactersVm:CharacterStatLine">
+                            <Grid Margin="0,3">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" SharedSizeGroup="ProfileLabel" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{Binding Label}" Theme="{StaticResource FieldLabelStyle}" />
+                                <TextBlock Grid.Column="1"
+                                           Margin="0,0,7,0"
+                                           HorizontalAlignment="Right"
+                                           Text="{Binding Value}"
+                                           FontWeight="SemiBold"
+                                           Foreground="{DynamicResource WindowForegroundBrush}" />
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+
+            <TextBlock Text="The attributes and points could not be read from the save file."
+                       Margin="0,12,0,0"
+                       FontSize="11"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource WarningForegroundBrush}"
+                       IsVisible="{Binding !HasStats}" />
+
+            <!-- Why nothing here can be changed. -->
+            <TextBlock Text="{Binding EditHint}"
+                       Margin="0,12,0,0"
+                       MaxWidth="320"
+                       HorizontalAlignment="Left"
+                       FontSize="11"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource WarningForegroundBrush}"
+                       IsVisible="{Binding HasEditHint}" />
+
+            <TextBlock Text="Changes are written when you save the character (Ctrl+S)."
+                       Margin="0,12,0,0"
+                       FontSize="11"
+                       Foreground="{DynamicResource SecondaryForegroundBrush}"
+                       IsVisible="{Binding HasChanges}" />
+        </StackPanel>
+    </Border>
+</UserControl>

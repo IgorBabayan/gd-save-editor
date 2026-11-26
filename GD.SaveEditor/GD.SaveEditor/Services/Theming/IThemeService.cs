@@ -1,4 +1,4 @@
-using System.Windows;
+using Avalonia.Controls;
 
 namespace GD.SaveEditor.Services.Theming;
 
@@ -12,5 +12,5 @@ public interface IThemeService
     void Apply(AppTheme theme);
 
     /// <summary>Loads a theme palette without applying it (e.g. for previews).</summary>
-    ResourceDictionary GetPalette(AppTheme theme);
+    IResourceDictionary GetPalette(AppTheme theme);
 }

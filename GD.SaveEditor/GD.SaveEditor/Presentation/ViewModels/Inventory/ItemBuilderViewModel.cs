@@ -1,4 +1,3 @@
-using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Security.Cryptography;
 using GD.SaveEditor.Presentation.ViewModels.Characters;
@@ -285,10 +284,16 @@ public sealed partial class ItemBuilderViewModel : ViewModelBase
         OnPropertyChanged(nameof(SelectedCategoryName));
     }
 
-    /// <summary>Items matching the pills and <see cref="SearchText"/>, grouped by type (at most <see cref="MaxListedItems"/>).</summary>
-    public ObservableCollection<ItemOptionViewModel> Options { get; } = [];
+    /// <summary>
+    /// Items matching the pills and <see cref="SearchText"/> (at most <see cref="MaxListedItems"/>), grouped by type: a
+    /// <see cref="ListGroupHeader"/> before each group. Replaced as a whole on every search, so the list updates once
+    /// instead of once per item.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasOptions))]
+    private IReadOnlyList<object> _optionRows = [];
 
-    public bool HasOptions => Options.Count > 0;
+    public bool HasOptions => OptionRows.Count > 0;
 
     /// <summary>Words to find in the name, type, set or record of an item.</summary>
     [ObservableProperty]
@@ -310,10 +315,26 @@ public sealed partial class ItemBuilderViewModel : ViewModelBase
         : KindName is { } kindName ? $"No {kindName.ToLowerInvariant()} items match the filters."
         : "No items match the filters.";
 
+    /// <summary>Typed words in upper case, the form the options' search keys are kept in.</summary>
+    private static string[] SearchWords(string text) =>
+        text.ToUpperInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+    /// <summary>True when every word occurs in the key (an ordinal scan: the key and words are both upper case).</summary>
+    private static bool Matches(string key, string[] words)
+    {
+        foreach (var word in words)
+        {
+            if (!key.Contains(word, StringComparison.Ordinal))
+                return false;
+        }
+
+        return true;
+    }
+
     private void ApplyFilter()
     {
         var selected = SelectedOption;
-        var words = SearchText.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var words = SearchWords(SearchText);
         var category = _selectedCategory.Value as ItemCategory?;
         var rarity = HasRarityFilter ? _selectedRarity.Value as ItemRarity? : null;
 
@@ -321,24 +342,20 @@ public sealed partial class ItemBuilderViewModel : ViewModelBase
                 (_kind is null || NewItemKinds.Matches(_kind.Value, o.Item))
                 && (category is null || o.Item.Category == category)
                 && (rarity is null || o.Item.Rarity == rarity)
-                && words.All(w => o.Name.Contains(w, StringComparison.CurrentCultureIgnoreCase)
-                                  || o.GroupName.Contains(w, StringComparison.CurrentCultureIgnoreCase)
-                                  || (o.Item.SetName?.Contains(w, StringComparison.CurrentCultureIgnoreCase) ?? false)
-                                  || o.Item.RecordPath.Contains(w, StringComparison.OrdinalIgnoreCase)))
+                && Matches(o.SearchKey, words))
             .ToList();
 
-        Options.Clear();
-        foreach (var option in matches.Take(MaxListedItems))
-            Options.Add(option);
+        var listed = matches.Count > MaxListedItems ? matches.GetRange(0, MaxListedItems) : matches;
 
         // The selection stays listed (the ListBox would clear it otherwise).
-        if (selected is not null && !Options.Contains(selected))
-            Options.Insert(0, selected);
+        if (selected is not null && !listed.Contains(selected))
+            listed.Insert(0, selected);
+
+        OptionRows = ListGroupHeader.Group(listed, o => o.GroupName);
 
         ListLimitText = matches.Count > MaxListedItems
             ? $"Showing {MaxListedItems:N0} of {matches.Count:N0} items. Type in the search box to narrow the list."
             : string.Empty;
-        OnPropertyChanged(nameof(HasOptions));
         OnPropertyChanged(nameof(EmptyListText));
     }
 
@@ -455,10 +472,15 @@ public sealed partial class ItemBuilderViewModel : ViewModelBase
 
     public string PickerTitle => PickerSlot is { } slot ? $"Choose {slot.Label.ToLowerInvariant()}" : string.Empty;
 
-    /// <summary>Entries for <see cref="PickerSlot"/> matching <see cref="PickerSearchText"/>.</summary>
-    public ObservableCollection<PartOptionViewModel> PickerOptions { get; } = [];
+    /// <summary>
+    /// Entries for <see cref="PickerSlot"/> matching <see cref="PickerSearchText"/>, grouped by kind (a
+    /// <see cref="ListGroupHeader"/> before each group). Replaced as a whole on every search.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPickerOptions))]
+    private IReadOnlyList<object> _pickerOptionRows = [];
 
-    public bool HasPickerOptions => PickerOptions.Count > 0;
+    public bool HasPickerOptions => PickerOptionRows.Count > 0;
 
     [ObservableProperty]
     private string _pickerSearchText = string.Empty;
@@ -523,29 +545,22 @@ public sealed partial class ItemBuilderViewModel : ViewModelBase
 
     private void LoadPickerOptions()
     {
-        PickerOptions.Clear();
         PickerLimitText = string.Empty;
         if (PickerSlot is not { } slot || SelectedOption is not { } selected)
         {
-            OnPropertyChanged(nameof(HasPickerOptions));
+            PickerOptionRows = [];
             return;
         }
 
         var options = GetPickerParts(slot.Kind, selected.Item);
-        var words = PickerSearchText.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        var matches = options
-            .Where(o => words.All(w => o.Name.Contains(w, StringComparison.CurrentCultureIgnoreCase)
-                                       || o.Summary.Contains(w, StringComparison.CurrentCultureIgnoreCase)
-                                       || o.Part.Code.Contains(w, StringComparison.OrdinalIgnoreCase)
-                                       || o.GroupName.Contains(w, StringComparison.CurrentCultureIgnoreCase)))
-            .ToList();
+        var words = SearchWords(PickerSearchText);
+        var matches = options.Where(o => Matches(o.SearchKey, words)).ToList();
 
-        foreach (var option in matches.Take(MaxListedParts))
-            PickerOptions.Add(option);
+        PickerOptionRows = ListGroupHeader.Group(
+            matches.Count > MaxListedParts ? matches.GetRange(0, MaxListedParts) : matches, o => o.GroupName);
 
         if (matches.Count > MaxListedParts)
             PickerLimitText = $"Showing {MaxListedParts:N0} of {matches.Count:N0}. Type in the search box to narrow the list.";
-        OnPropertyChanged(nameof(HasPickerOptions));
     }
 
     /// <summary>
@@ -692,7 +707,7 @@ public sealed partial class ItemBuilderViewModel : ViewModelBase
         ? KindName is { } kindName ? $"New {kindName.ToLowerInvariant()}" : "New item"
         : Preview?.TypeText ?? SelectedOption.Details;
 
-    public System.Windows.Media.ImageSource? HeaderIcon => Preview?.Icon ?? SelectedOption?.Icon;
+    public Avalonia.Media.Imaging.Bitmap? HeaderIcon => Preview?.Icon ?? SelectedOption?.Icon;
 
     /// <summary>The name color: affixes raise a common or magical base, like in the game.</summary>
     public ItemRarity HeaderRarity => Preview?.Rarity ?? SelectedOption?.Rarity ?? ItemRarity.Unknown;

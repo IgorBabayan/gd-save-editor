@@ -1,5 +1,5 @@
-using System.Windows;
-using System.Windows.Controls;
+using Avalonia;
+using Avalonia.Controls;
 
 namespace GD.SaveEditor.Presentation.Controls;
 
@@ -10,24 +10,24 @@ namespace GD.SaveEditor.Presentation.Controls;
 /// </summary>
 public sealed class FillHeightDecorator : Decorator
 {
-    protected override Size MeasureOverride(Size constraint)
+    protected override Size MeasureOverride(Size availableSize)
     {
         if (Child is null)
             return default;
 
-        Child.Measure(constraint);
+        Child.Measure(availableSize);
         return new Size(Child.DesiredSize.Width, 0);
     }
 
-    protected override Size ArrangeOverride(Size arrangeSize)
+    protected override Size ArrangeOverride(Size finalSize)
     {
         if (Child is null)
-            return arrangeSize;
+            return finalSize;
 
         // Measured above without the final height (possibly infinite): measure again with it, so scroll viewers
         // inside get the real viewport instead of being clipped.
-        Child.Measure(arrangeSize);
-        Child.Arrange(new Rect(arrangeSize));
-        return arrangeSize;
+        Child.Measure(finalSize);
+        Child.Arrange(new Rect(finalSize));
+        return finalSize;
     }
 }

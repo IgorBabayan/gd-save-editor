@@ -1,0 +1,25 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mi="using:Material.Icons.Avalonia"
+             x:Class="GD.SaveEditor.App"
+             Name="GD Save Editor"
+             RequestedThemeVariant="Dark">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!-- Active color palette. Must stay first: IThemeService replaces it at runtime. -->
+                <ResourceInclude Source="avares://GD.SaveEditor/Themes/Colors/DefaultNight.axaml" />
+                <ResourceInclude Source="avares://GD.SaveEditor/Themes/WindowChrome.axaml" />
+                <ResourceInclude Source="avares://GD.SaveEditor/Themes/Controls.axaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+
+    <Application.Styles>
+        <!-- Base look of the controls without a theme of their own (combo boxes, tooltips, popups, ...). -->
+        <FluentTheme />
+        <!-- Templates of the Material icons (MaterialIcon draws nothing without them). -->
+        <mi:MaterialIconStyles />
+        <StyleInclude Source="avares://GD.SaveEditor/Themes/Styles.axaml" />
+    </Application.Styles>
+</Application>

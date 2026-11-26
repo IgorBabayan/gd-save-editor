@@ -1,0 +1,18 @@
+<!-- States of the parts of an item grid (see BagResources.axaml): items being dragged, the drop preview colors. -->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Style Selector="ContentControl.bagItem.sizeKnown">
+        <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="ContentControl.bagItem.dragging">
+        <Setter Property="Opacity" Value="0.35" />
+    </Style>
+    <Style Selector="Border.dropPreview">
+        <Setter Property="Background" Value="{DynamicResource DropInvalidBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource DropInvalidBorderBrush}" />
+    </Style>
+    <Style Selector="Border.dropPreview.valid">
+        <Setter Property="Background" Value="{DynamicResource DropValidBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource DropValidBorderBrush}" />
+    </Style>
+</Styles>

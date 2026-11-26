@@ -1,0 +1,251 @@
+<Window x:Class="GD.SaveEditor.Presentation.Views.Settings.SettingsWindow"
+        xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:settingsVm="using:GD.SaveEditor.Presentation.ViewModels.Settings"
+        xmlns:mi="using:Material.Icons.Avalonia"
+        xmlns:behaviors="using:GD.SaveEditor.Presentation.Behaviors"
+        xmlns:toastViews="using:GD.SaveEditor.Presentation.Views.Toasts"
+        mc:Ignorable="d"
+        x:DataType="settingsVm:SettingsViewModel"
+        x:Name="Root"
+        Title="Settings"
+        Width="560"
+        SizeToContent="Height"
+        CanResize="False"
+        CanMinimize="False"
+        CanMaximize="False"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner"
+        WindowDecorations="BorderOnly"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaTitleBarHeightHint="32"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        Foreground="{DynamicResource WindowForegroundBrush}">
+
+    <Window.KeyBindings>
+        <KeyBinding Gesture="Escape" Command="{Binding CancelCommand}" />
+    </Window.KeyBindings>
+
+    <Border BorderBrush="{DynamicResource WindowBorderBrush}" BorderThickness="1">
+        <Grid RowDefinitions="32,*,Auto">
+
+            <!-- ===== Title bar ===== -->
+            <Panel Grid.Row="0" Background="{DynamicResource TitleBarBackgroundBrush}" WindowDecorationProperties.ElementRole="TitleBar">
+                <TextBlock Margin="12,0,0,0"
+                           VerticalAlignment="Center"
+                           FontSize="12"
+                           Text="{Binding #Root.Title}" />
+                <Button HorizontalAlignment="Right"
+                        Theme="{StaticResource CloseCaptionButtonStyle}"
+                        WindowDecorationProperties.ElementRole="User"
+                        ToolTip.Tip="Close"
+                        Command="{Binding CancelCommand}">
+                    <mi:MaterialIcon Kind="WindowClose" Width="16" Height="16" />
+                </Button>
+            </Panel>
+
+            <!-- ===== Content ===== -->
+            <StackPanel Grid.Row="1" Margin="20,16,20,20">
+
+                <!-- Appearance -->
+                <TextBlock Theme="{StaticResource SectionHeaderTextStyle}" Text="Appearance" />
+                <TextBlock Theme="{StaticResource SecondaryTextStyle}"
+                           Margin="0,2,0,8"
+                           Text="Choose how the editor looks. Changes are previewed immediately." />
+
+                <ListBox Margin="-4,0"
+                         ItemsSource="{Binding ThemeOptions}"
+                         SelectedItem="{Binding SelectedThemeOption}"
+                         ItemContainerTheme="{StaticResource CardListBoxItemStyle}"
+                         AutomationProperties.Name="Appearance"
+                         KeyboardNavigation.TabNavigation="Once">
+                    <ListBox.Template>
+                        <ControlTemplate TargetType="ListBox">
+                            <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}" />
+                        </ControlTemplate>
+                    </ListBox.Template>
+                    <ListBox.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <UniformGrid Columns="3" />
+                        </ItemsPanelTemplate>
+                    </ListBox.ItemsPanel>
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="settingsVm:ThemeOption">
+                            <StackPanel>
+                                <!-- Miniature window preview drawn with the theme's own colors -->
+                                <Border Height="64"
+                                        CornerRadius="4"
+                                        BorderThickness="1"
+                                        BorderBrush="{Binding Border}"
+                                        Background="{Binding WindowBackground}">
+                                    <Grid RowDefinitions="12,*">
+                                        <Border Grid.Row="0" CornerRadius="3,3,0,0" Background="{Binding TitleBarBackground}" />
+                                        <StackPanel Grid.Row="1" Margin="8,7,8,0">
+                                            <Border Width="64" Height="5" HorizontalAlignment="Left"
+                                                    CornerRadius="2" Background="{Binding Foreground}" />
+                                            <Border Width="42" Height="5" Margin="0,5,0,0" HorizontalAlignment="Left"
+                                                    CornerRadius="2" Opacity="0.5" Background="{Binding Foreground}" />
+                                            <Border Width="30" Height="10" Margin="0,7,0,0" HorizontalAlignment="Left"
+                                                    CornerRadius="2" Background="{Binding Accent}" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                                <TextBlock Margin="2,6,2,0" Text="{Binding DisplayName}" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+
+                <!-- Saves folder -->
+                <TextBlock Theme="{StaticResource SectionHeaderTextStyle}" Margin="0,20,0,0" Text="Grim Dawn saves folder" />
+                <TextBlock Theme="{StaticResource SecondaryTextStyle}"
+                           Margin="0,2,0,8"
+                           Text="Folder that contains your character saves (one _Name folder per character)." />
+
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBox Grid.Column="0"
+                             Text="{Binding SaveFolderPath}"
+                             AutomationProperties.Name="Grim Dawn saves folder" />
+                    <Button Grid.Column="1"
+                            Margin="8,0,0,0"
+                            Theme="{StaticResource IconButtonStyle}"
+                            ToolTip.Tip="Select folder"
+                            AutomationProperties.Name="Select folder"
+                            Command="{Binding SelectFolderCommand}">
+                        <mi:MaterialIcon Kind="FolderOpen" Width="18" Height="18" />
+                    </Button>
+                </Grid>
+
+                <TextBlock Margin="0,6,0,0"
+                           FontSize="12"
+                           Foreground="{DynamicResource WarningForegroundBrush}"
+                           Text="This folder does not exist."
+                           IsVisible="{Binding IsSaveFolderMissing}" />
+
+                <!-- Game folder (fallback source of the database generator) -->
+                <TextBlock Theme="{StaticResource SectionHeaderTextStyle}" Margin="0,20,0,0" Text="Grim Dawn game folder" />
+                <TextBlock Theme="{StaticResource SecondaryTextStyle}"
+                           Margin="0,2,0,8"
+                           TextWrapping="Wrap"
+                           Text="Installation folder of the game. The database generator copies the game files from here when they cannot be downloaded." />
+
+                <Grid ColumnDefinitions="*,Auto">
+                    <TextBox Grid.Column="0"
+                             Text="{Binding GameFolderPath}"
+                             AutomationProperties.Name="Grim Dawn game folder" />
+                    <Button Grid.Column="1"
+                            Margin="8,0,0,0"
+                            Theme="{StaticResource IconButtonStyle}"
+                            ToolTip.Tip="Select folder"
+                            AutomationProperties.Name="Select game folder"
+                            Command="{Binding SelectGameFolderCommand}">
+                        <mi:MaterialIcon Kind="FolderOpen" Width="18" Height="18" />
+                    </Button>
+                </Grid>
+
+                <TextBlock Margin="0,6,0,0"
+                           FontSize="12"
+                           Foreground="{DynamicResource WarningForegroundBrush}"
+                           Text="No Grim Dawn installation found here (database\database.arz is missing)."
+                           IsVisible="{Binding IsGameFolderInvalid}" />
+
+                <!-- Updates -->
+                <TextBlock Theme="{StaticResource SectionHeaderTextStyle}" Margin="0,20,0,0" Text="Updates" />
+                <TextBlock Theme="{StaticResource SecondaryTextStyle}"
+                           Margin="0,2,0,8"
+                           Text="{Binding CurrentVersionText}" />
+
+                <DockPanel LastChildFill="False">
+                    <CheckBox DockPanel.Dock="Left"
+                              VerticalAlignment="Center"
+                              Content="_Auto-update"
+                              IsChecked="{Binding AutoUpdate}"
+                              AutomationProperties.Name="Auto-update" />
+                    <Button DockPanel.Dock="Right"
+                            Margin="8,0,0,0"
+                            Theme="{StaticResource AccentButtonStyle}"
+                            Content="_Download and update"
+                            ToolTip.Tip="Download the new version, then restart the editor to install it"
+                            Command="{Binding DownloadAndUpdateCommand}" />
+                    <Button DockPanel.Dock="Right"
+                            Theme="{StaticResource DialogButtonStyle}"
+                            Content="Check for _updates"
+                            Command="{Binding CheckForUpdatesCommand}" />
+                </DockPanel>
+                <TextBlock Theme="{StaticResource SecondaryTextStyle}"
+                           Margin="26,4,0,0"
+                           Text="On every start, check GitHub for a newer release. If one is found, it is downloaded and installed, and the editor restarts automatically." />
+                <TextBlock Margin="26,4,0,0"
+                           FontSize="12"
+                           Foreground="{DynamicResource AccentBrush}"
+                           Text="{Binding AvailableUpdateText}"
+                           IsVisible="{Binding HasAvailableUpdate}" />
+
+                <!-- Countdown before the editor closes to install an update -->
+                <StackPanel Margin="0,14,0,0" Orientation="Horizontal">
+                    <TextBlock VerticalAlignment="Center"
+                               Text="Seconds before auto-restart"
+                               Foreground="{DynamicResource WindowForegroundBrush}" />
+                    <Button Margin="12,0,0,0"
+                            Theme="{StaticResource IconButtonStyle}"
+                            ToolTip.Tip="Decrease"
+                            AutomationProperties.Name="Decrease seconds before auto-restart"
+                            Command="{Binding DecreaseRestartDelayCommand}">
+                        <mi:MaterialIcon Kind="Minus" Width="16" Height="16" />
+                    </Button>
+                    <TextBox Width="64"
+                             Margin="4,0"
+                             TextAlignment="Center"
+                             MaxLength="3"
+                             Text="{Binding RestartDelayText}"
+                             behaviors:NumericInput.IsEnabled="True"
+                             behaviors:NumericInput.Maximum="{Binding MaxRestartDelaySeconds}"
+                             AutomationProperties.Name="Seconds before auto-restart" />
+                    <Button Theme="{StaticResource IconButtonStyle}"
+                            ToolTip.Tip="Increase"
+                            AutomationProperties.Name="Increase seconds before auto-restart"
+                            Command="{Binding IncreaseRestartDelayCommand}">
+                        <mi:MaterialIcon Kind="Plus" Width="16" Height="16" />
+                    </Button>
+                </StackPanel>
+                <TextBlock Margin="0,6,0,0"
+                           FontSize="12"
+                           Foreground="{DynamicResource WarningForegroundBrush}"
+                           IsVisible="{Binding IsRestartDelayInvalid}">
+                    <Run Text="Enter a number from 0 to" />
+                    <Run Text="{Binding MaxRestartDelaySeconds, Mode=OneWay}" /><Run Text="." />
+                </TextBlock>
+
+                <TextBlock Margin="0,6,0,0"
+                           FontSize="12"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource WarningForegroundBrush}"
+                           Text="This copy was not installed with the installer, so it will not be updated."
+                           IsVisible="{Binding IsNotInstalled}" />
+            </StackPanel>
+
+            <!-- ===== Toasts (bottom-right, above the content) ===== -->
+            <toastViews:ToastHost Grid.Row="1" ZIndex="10" />
+
+            <!-- ===== Footer ===== -->
+            <Border Grid.Row="2"
+                    Padding="20,12"
+                    Background="{DynamicResource TitleBarBackgroundBrush}"
+                    BorderBrush="{DynamicResource WindowBorderBrush}"
+                    BorderThickness="0,1,0,0">
+                <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                    <Button Theme="{StaticResource AccentButtonStyle}"
+                            Content="Save"
+                            IsDefault="True"
+                            Command="{Binding SaveCommand}" />
+                    <Button Margin="8,0,0,0"
+                            Theme="{StaticResource DialogButtonStyle}"
+                            Content="Cancel"
+                            Command="{Binding CancelCommand}" />
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Border>
+</Window>

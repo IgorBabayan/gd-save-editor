@@ -1,9 +1,10 @@
-name: Release - Windows installer
+name: Release - Windows, Linux and macOS
 
 # Runs every time a pull request is MERGED into the `release` branch.
-# Builds a self-contained win-x64 publish, packs it with Inno Setup and
-# publishes a GitHub Release (shown in the "Releases" panel of the repo page)
-# with the installer attached. The newest run is marked as "Latest".
+# Builds self-contained publishes for Windows (Inno Setup installer), Linux (tar.gz)
+# and macOS (Intel and Apple silicon .app bundles in tar.gz, which keeps the execute bits)
+# and publishes one GitHub Release (shown in the "Releases" panel of the repo page)
+# with all of them attached. The newest run is marked as "Latest".
 on:
   pull_request:
     types: [closed]
@@ -19,25 +20,25 @@ concurrency:
 
 env:
   PROJECT: GD.SaveEditor/GD.SaveEditor/GD.SaveEditor.csproj
-  RUNTIME: win-x64
   CONFIGURATION: Release
+  APP_NAME: GD.SaveEditor
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
 
 jobs:
-  build-installer:
+  version:
     # Skip PRs that were closed without merging.
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
-    runs-on: windows-latest
-
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      sha: ${{ steps.version.outputs.sha }}
     steps:
       - name: Checkout merged commit
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.0.x
 
       - name: Compute version
         id: version
@@ -50,7 +51,24 @@ jobs:
           $version = "$($parts[0]).$($parts[1]).$env:GITHUB_RUN_NUMBER"
           "version=$version" >> $env:GITHUB_OUTPUT
           "tag=v$version"    >> $env:GITHUB_OUTPUT
+          "sha=${{ github.event.pull_request.merge_commit_sha || github.sha }}" >> $env:GITHUB_OUTPUT
           Write-Host "Version: $version"
+
+  windows:
+    needs: version
+    runs-on: windows-latest
+    env:
+      RUNTIME: win-x64
+    steps:
+      - name: Checkout merged commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.sha }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
 
       - name: Restore
         run: dotnet restore ${{ env.PROJECT }} -r ${{ env.RUNTIME }}
@@ -62,7 +80,7 @@ jobs:
           -r ${{ env.RUNTIME }}
           --self-contained true
           --no-restore
-          -p:Version=${{ steps.version.outputs.version }}
+          -p:Version=${{ needs.version.outputs.version }}
           -p:DebugType=none
           -o publish
 
@@ -80,7 +98,7 @@ jobs:
           $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
           if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
           & $iscc `
-            "/DAppVersion=${{ steps.version.outputs.version }}" `
+            "/DAppVersion=${{ needs.version.outputs.version }}" `
             "/DSourceDir=$env:GITHUB_WORKSPACE\publish" `
             "/DOutputDir=$env:GITHUB_WORKSPACE\dist" `
             installer\GD.SaveEditor.iss
@@ -90,20 +108,124 @@ jobs:
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GD.SaveEditor-Setup-${{ steps.version.outputs.version }}
+          name: dist-windows
           path: dist/*.exe
           if-no-files-found: error
+
+  unix:
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runtime: linux-x64
+            os: ubuntu-latest
+          - runtime: osx-x64
+            os: macos-latest
+          - runtime: osx-arm64
+            os: macos-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout merged commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.version.outputs.sha }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore ${{ env.PROJECT }} -r ${{ matrix.runtime }}
+
+      - name: Publish (self-contained)
+        run: >
+          dotnet publish ${{ env.PROJECT }}
+          -c ${{ env.CONFIGURATION }}
+          -r ${{ matrix.runtime }}
+          --self-contained true
+          --no-restore
+          -p:Version=${{ needs.version.outputs.version }}
+          -p:DebugType=none
+          -o publish
+
+      - name: Package (Linux)
+        if: startsWith(matrix.runtime, 'linux')
+        run: |
+          set -euo pipefail
+          name="${APP_NAME}-${{ needs.version.outputs.version }}-${{ matrix.runtime }}"
+          mkdir -p dist "stage/$name"
+          cp -R publish/. "stage/$name/"
+          chmod +x "stage/$name/${APP_NAME}"
+          tar -C stage -czf "dist/$name.tar.gz" "$name"
+          ls -l dist
+
+      - name: Package (macOS .app)
+        if: startsWith(matrix.runtime, 'osx')
+        run: |
+          set -euo pipefail
+          version="${{ needs.version.outputs.version }}"
+          name="${APP_NAME}-$version-${{ matrix.runtime }}"
+          app="stage/Grim Dawn Save Editor.app"
+          mkdir -p dist "$app/Contents/MacOS" "$app/Contents/Resources"
+          cp -R publish/. "$app/Contents/MacOS/"
+          chmod +x "$app/Contents/MacOS/${APP_NAME}"
+          cat > "$app/Contents/Info.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleName</key><string>Grim Dawn Save Editor</string>
+            <key>CFBundleDisplayName</key><string>Grim Dawn Save Editor</string>
+            <key>CFBundleIdentifier</key><string>com.igorbabayan.gdsaveeditor</string>
+            <key>CFBundleExecutable</key><string>${APP_NAME}</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+            <key>CFBundleVersion</key><string>$version</string>
+            <key>CFBundleShortVersionString</key><string>$version</string>
+            <key>LSMinimumSystemVersion</key><string>11.0</string>
+            <key>NSHighResolutionCapable</key><true/>
+          </dict>
+          </plist>
+          EOF
+          # The bundle is not signed by a developer ID: sign it ad hoc so Apple silicon runs it.
+          codesign --force --deep --sign - "$app"
+          tar -C stage -czf "dist/$name.tar.gz" "Grim Dawn Save Editor.app"
+          ls -l dist
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.runtime }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  release:
+    needs: [version, windows, unix]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download builds
+        uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: GD Save Editor ${{ steps.version.outputs.version }}
-          target_commitish: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+          tag_name: ${{ needs.version.outputs.tag }}
+          name: GD Save Editor ${{ needs.version.outputs.version }}
+          target_commitish: ${{ needs.version.outputs.sha }}
           body: |
-            Windows installer built from ${{ github.event.pull_request.html_url || github.sha }}
+            Built from ${{ github.event.pull_request.html_url || github.sha }}
             ${{ github.event.pull_request.title }}
+
+            - Windows: run the Setup .exe (updates itself from new releases).
+            - Linux: extract the linux-x64 tar.gz and run `GD.SaveEditor`.
+            - macOS: extract the osx-arm64 (Apple silicon) or osx-x64 (Intel) tar.gz and open the app
+              (first start: right-click the app, then Open, since it is not notarized).
           generate_release_notes: true
           make_latest: true
-          files: dist/*.exe
+          files: dist/*
           fail_on_unmatched_files: true

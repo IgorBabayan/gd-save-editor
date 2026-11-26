@@ -1,0 +1,211 @@
+<inventoryViews:ItemGridView x:Class="GD.SaveEditor.Presentation.Views.Stash.StashGroupView"
+                             xmlns="https://github.com/avaloniaui"
+                             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                             xmlns:inventoryVm="using:GD.SaveEditor.Presentation.ViewModels.Inventory"
+                             xmlns:stashVm="using:GD.SaveEditor.Presentation.ViewModels.Stash"
+                             xmlns:inventoryViews="using:GD.SaveEditor.Presentation.Views.Inventory"
+                             xmlns:mi="using:Material.Icons.Avalonia"
+                             mc:Ignorable="d"
+                             x:DataType="stashVm:StashGroupViewModel"
+                             d:DesignHeight="700" d:DesignWidth="400">
+
+    <inventoryViews:ItemGridView.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceInclude Source="avares://GD.SaveEditor/Presentation/Views/Inventory/BagResources.axaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!--
+                Tab buttons of the stash: a chest icon with the tab number, gold when shown. A tab that was not bought
+                in the game yet is in the save file neither: its button is disabled and shows a lock. Holding a dragged
+                item over a tab shows that tab; dropping it there puts it in the first free cell.
+            -->
+            <ControlTheme x:Key="StashTabItemStyle" TargetType="ListBoxItem" x:DataType="inventoryVm:InventoryBagViewModel">
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="ToolTip.Tip" Value="{Binding Summary}" />
+                <Setter Property="ToolTip.ShowOnDisabled" Value="True" />
+                <Setter Property="IsEnabled" Value="{Binding IsAvailable}" />
+                <Setter Property="AutomationProperties.Name" Value="{Binding Name}" />
+                <Setter Property="Template">
+                    <ControlTemplate>
+                        <Border Name="Bd"
+                                Classes="bagTab"
+                                Classes.locked="{Binding IsLocked}"
+                                Width="34" Height="30"
+                                Margin="3,0,0,0"
+                                CornerRadius="3"
+                                BorderThickness="1"
+                                BorderBrush="{StaticResource SlotBorderBrush}"
+                                Background="{StaticResource SlotBackgroundBrush}">
+                            <Panel>
+                                <mi:MaterialIcon Name="TabIcon"
+                                                 Kind="PackageVariant"
+                                                 Width="18" Height="18"
+                                                 Foreground="{StaticResource DollSecondaryTextBrush}"
+                                                 IsVisible="{Binding IsEmpty}" />
+                                <mi:MaterialIcon Name="FullTabIcon"
+                                                 Kind="PackageVariantClosed"
+                                                 Width="18" Height="18"
+                                                 Foreground="{StaticResource DollSecondaryTextBrush}"
+                                                 IsVisible="{Binding !IsEmpty}" />
+                                <mi:MaterialIcon Name="LockIcon"
+                                                 Kind="LockOutline"
+                                                 Width="18" Height="18"
+                                                 Foreground="{StaticResource DollSecondaryTextBrush}"
+                                                 IsVisible="False" />
+                                <TextBlock Text="{Binding Number}"
+                                           Margin="0,0,3,1"
+                                           FontSize="9"
+                                           FontWeight="SemiBold"
+                                           HorizontalAlignment="Right"
+                                           VerticalAlignment="Bottom"
+                                           Foreground="{StaticResource DollTextBrush}" />
+                            </Panel>
+                        </Border>
+                    </ControlTemplate>
+                </Setter>
+                <Style Selector="^:pointerover /template/ Border#Bd">
+                    <Setter Property="BorderBrush" Value="{StaticResource BagFrameBrush}" />
+                </Style>
+                <Style Selector="^:selected /template/ Border#Bd">
+                    <Setter Property="BorderBrush" Value="{StaticResource BagGoldBrush}" />
+                </Style>
+                <Style Selector="^:selected /template/ mi|MaterialIcon">
+                    <Setter Property="Foreground" Value="{StaticResource BagGoldBrush}" />
+                </Style>
+                <!-- Not bought in the game yet: a faded lock. -->
+                <Style Selector="^ /template/ Border#Bd.locked">
+                    <Setter Property="Opacity" Value="0.45" />
+                    <Setter Property="Background" Value="Transparent" />
+                    <Setter Property="Cursor" Value="No" />
+                </Style>
+                <Style Selector="^ /template/ Border#Bd.locked mi|MaterialIcon">
+                    <Setter Property="IsVisible" Value="False" />
+                </Style>
+                <Style Selector="^ /template/ Border#Bd.locked mi|MaterialIcon#LockIcon">
+                    <Setter Property="IsVisible" Value="True" />
+                </Style>
+            </ControlTheme>
+        </ResourceDictionary>
+    </inventoryViews:ItemGridView.Resources>
+
+    <inventoryViews:ItemGridView.Styles>
+        <StyleInclude Source="avares://GD.SaveEditor/Presentation/Views/Inventory/BagStyles.axaml" />
+    </inventoryViews:ItemGridView.Styles>
+
+    <!-- One stash, like the game's stash window: the tab buttons, then the grid of the selected tab. -->
+    <Border Margin="0,0,16,16"
+            Padding="14"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            CornerRadius="6"
+            BorderThickness="1"
+            BorderBrush="{DynamicResource ControlBorderBrush}"
+            Background="{StaticResource DollBackgroundBrush}">
+        <StackPanel>
+            <Border Height="38"
+                    Margin="0,0,0,6"
+                    Padding="8,0,4,0"
+                    CornerRadius="3"
+                    Background="{StaticResource BagHeaderBrush}">
+                <DockPanel LastChildFill="False" VerticalAlignment="Center">
+                    <TextBlock DockPanel.Dock="Left"
+                               Text="{Binding Title}"
+                               FontSize="14"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"
+                               Foreground="{StaticResource DollTextBrush}" />
+
+                    <!-- Makes a new item in the item builder and puts it at the first free cell of the shown tab. -->
+                    <Button DockPanel.Dock="Left"
+                            Margin="8,0,0,0"
+                            Theme="{StaticResource SubtleIconButtonStyle}"
+                            ToolTip.Tip="Add an item to the shown tab (right-click a cell to put it there)"
+                            AutomationProperties.Name="Add item"
+                            Command="{Binding NewItemCommand}"
+                            CommandParameter="{Binding $self}"
+                            IsVisible="{Binding CanEditItems}">
+                        <mi:MaterialIcon Kind="PlusBoxOutline" Width="18" Height="18" Foreground="{StaticResource BagGoldBrush}" />
+                    </Button>
+
+                    <!-- Puts the tabs back as the file has them (shown while something in them changed). -->
+                    <Button DockPanel.Dock="Left"
+                            Margin="4,0,0,0"
+                            Theme="{StaticResource SubtleIconButtonStyle}"
+                            ToolTip.Tip="Undo all changes to this stash (moved, added, changed and removed items)"
+                            AutomationProperties.Name="Undo stash changes"
+                            Command="{Binding ResetItemsCommand}"
+                            IsVisible="{Binding AreItemsChanged}">
+                        <mi:MaterialIcon Kind="Undo" Width="16" Height="16" Foreground="{StaticResource BagGoldBrush}" />
+                    </Button>
+                </DockPanel>
+            </Border>
+
+            <ListBox Margin="0,0,0,6"
+                     HorizontalAlignment="Left"
+                     ItemsSource="{Binding Tabs}"
+                     SelectedItem="{Binding SelectedTab, Mode=TwoWay}"
+                     ItemContainerTheme="{StaticResource StashTabItemStyle}"
+                     Background="Transparent"
+                     BorderThickness="0"
+                     Padding="0"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                     AutomationProperties.Name="Stash tabs"
+                     IsVisible="{Binding HasTabs}">
+                <ListBox.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel Orientation="Horizontal" />
+                    </ItemsPanelTemplate>
+                </ListBox.ItemsPanel>
+            </ListBox>
+
+            <TextBlock Margin="0,0,0,6"
+                       FontSize="12"
+                       FontWeight="SemiBold"
+                       Text="{Binding SelectedTab.Name}"
+                       Foreground="{StaticResource DollSecondaryTextBrush}"
+                       IsVisible="{Binding HasTabs}" />
+
+            <ContentControl Focusable="False"
+                            HorizontalAlignment="Left"
+                            Content="{Binding SelectedTab}"
+                            ContentTemplate="{StaticResource BagGridTemplate}" />
+
+            <TextBlock Margin="0,8,0,0"
+                       MaxWidth="340"
+                       HorizontalAlignment="Left"
+                       FontSize="11"
+                       TextWrapping="Wrap"
+                       Text="{Binding Notice}"
+                       Foreground="{StaticResource DollSecondaryTextBrush}"
+                       IsVisible="{Binding HasNotice}" />
+
+            <TextBlock Margin="0,8,0,0"
+                       MaxWidth="340"
+                       HorizontalAlignment="Left"
+                       FontSize="11"
+                       TextWrapping="Wrap"
+                       Text="{Binding StatusMessage}"
+                       Foreground="{DynamicResource WarningForegroundBrush}"
+                       IsVisible="{Binding HasStatusMessage}" />
+
+            <TextBlock Margin="0,8,0,0"
+                       MaxWidth="340"
+                       HorizontalAlignment="Left"
+                       FontSize="11"
+                       TextWrapping="Wrap"
+                       Text="{Binding MoveHint}"
+                       Foreground="{DynamicResource WarningForegroundBrush}"
+                       IsVisible="{Binding HasMoveHint}" />
+
+            <TextBlock Margin="0,8,0,0"
+                       FontSize="11"
+                       Text="Reading item names and icons…"
+                       Foreground="{StaticResource DollSecondaryTextBrush}"
+                       IsVisible="{Binding IsLoading}" />
+        </StackPanel>
+    </Border>
+</inventoryViews:ItemGridView>

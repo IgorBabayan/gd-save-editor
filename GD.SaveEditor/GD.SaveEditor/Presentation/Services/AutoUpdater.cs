@@ -3,7 +3,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Text.Json;
-using System.Windows;
+using Avalonia;
+using Avalonia.Controls.ApplicationLifetimes;
 using GD.SaveEditor.Presentation.Services.Toasts;
 using GD.SaveEditor.Services.Notifications;
 using GD.SaveEditor.Services.Settings;
@@ -123,7 +124,7 @@ public sealed partial class AutoUpdater(
             updateService.LaunchInstaller(installerPath);
 
             // Exit now so the installer can replace the files; it starts the new version afterwards.
-            Application.Current.Shutdown();
+            (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.Shutdown();
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
         {

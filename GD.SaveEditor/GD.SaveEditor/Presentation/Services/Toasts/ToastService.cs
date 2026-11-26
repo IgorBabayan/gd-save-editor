@@ -1,5 +1,5 @@
 using System.Collections.ObjectModel;
-using System.Windows.Threading;
+using Avalonia.Threading;
 using GD.SaveEditor.Services.Notifications;
 
 namespace GD.SaveEditor.Presentation.Services.Toasts;

@@ -1,0 +1,228 @@
+<UserControl x:Class="GD.SaveEditor.Presentation.Views.Factions.FactionsView"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:factionsVm="using:GD.SaveEditor.Presentation.ViewModels.Factions"
+             xmlns:behaviors="using:GD.SaveEditor.Presentation.Behaviors"
+             xmlns:mi="using:Material.Icons.Avalonia"
+             mc:Ignorable="d"
+             x:DataType="factionsVm:FactionsViewModel"
+             d:DesignHeight="700" d:DesignWidth="900">
+
+    <UserControl.Resources>
+        <ControlTheme x:Key="NoteTextStyle" TargetType="TextBlock">
+            <Setter Property="Margin" Value="0,8,0,0" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Foreground" Value="{DynamicResource WarningForegroundBrush}" />
+        </ControlTheme>
+
+        <ControlTheme x:Key="ValueTextBoxStyle" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+            <Setter Property="MinHeight" Value="26" />
+            <Setter Property="Padding" Value="6,2" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="TextAlignment" Value="Right" />
+            <Style Selector="^.readOnly">
+                <Setter Property="Foreground" Value="{DynamicResource SecondaryForegroundBrush}" />
+            </Style>
+            <Style Selector="^.changed">
+                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+            </Style>
+        </ControlTheme>
+
+        <!--
+            One faction: name, rank (click to pick another; the menu is built in code-behind with the themed menu
+            style), undo, value. Changed values are in the accent color, invalid ones get a red frame.
+        -->
+        <DataTemplate x:Key="FactionTemplate" DataType="factionsVm:FactionItemViewModel">
+            <Grid Margin="0,3,16,3" ColumnDefinitions="*,Auto,Auto,90">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" ToolTip.Tip="{Binding ToolTip}">
+                    <TextBlock Classes="factionName" Classes.changed="{Binding IsChanged}" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                    <mi:MaterialIcon Kind="LockOutline" Width="12" Height="12" Margin="6,0,0,0"
+                                     Foreground="{DynamicResource SecondaryForegroundBrush}"
+                                     ToolTip.Tip="Not met yet: changing the reputation unlocks it"
+                                     IsVisible="{Binding IsLocked}" />
+                </StackPanel>
+
+                <Button Grid.Column="1"
+                        Margin="8,0,4,0"
+                        Padding="0"
+                        Width="NaN"
+                        Height="NaN"
+                        MinWidth="0"
+                        MinHeight="0"
+                        Theme="{StaticResource SubtleIconButtonStyle}"
+                        IsEnabled="{Binding CanEdit}"
+                        Click="OnTierButtonClick"
+                        ToolTip.Tip="Set the reputation to a rank"
+                        AutomationProperties.Name="{Binding Name, StringFormat='Rank of {0}'}">
+                    <Border Classes="tierBadge"
+                            Classes.hostile="{Binding IsHostileNow}"
+                            Theme="{StaticResource BadgeBorderStyle}"
+                            BorderBrush="{DynamicResource ControlBorderBrush}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding TierName}" FontSize="11"
+                                       Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                            <mi:MaterialIcon Kind="ChevronDown" Width="12" Height="12" Margin="2,0,0,0"
+                                             Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                        </StackPanel>
+                    </Border>
+                </Button>
+
+                <Button Grid.Column="2"
+                        Margin="0,0,4,0"
+                        VerticalAlignment="Center"
+                        Theme="{StaticResource SubtleIconButtonStyle}"
+                        ToolTip.Tip="Undo the change (Esc)"
+                        AutomationProperties.Name="{Binding Name, StringFormat='Undo {0}'}"
+                        Command="{Binding ResetCommand}"
+                        IsVisible="{Binding IsChanged}">
+                    <mi:MaterialIcon Kind="Undo" Width="14" Height="14" Foreground="{DynamicResource AccentBrush}" />
+                </Button>
+
+                <TextBox Grid.Column="3"
+                         Theme="{StaticResource ValueTextBoxStyle}"
+                         Classes="factionValue"
+                         Classes.changed="{Binding IsChanged}"
+                         Classes.error="{Binding HasError}"
+                         Classes.readOnly="{Binding IsReadOnly}"
+                         AutomationProperties.Name="{Binding Name, StringFormat='Reputation with {0}'}"
+                         Text="{Binding Text}"
+                         IsReadOnly="{Binding IsReadOnly, Mode=OneWay}"
+                         ToolTip.Tip="{Binding ToolTip}"
+                         behaviors:NumericInput.IsEnabled="True"
+                         behaviors:NumericInput.Minimum="{Binding Minimum}"
+                         behaviors:NumericInput.Maximum="{Binding Maximum}">
+                    <TextBox.KeyBindings>
+                        <KeyBinding Gesture="Escape" Command="{Binding ResetCommand}" />
+                    </TextBox.KeyBindings>
+                </TextBox>
+            </Grid>
+        </DataTemplate>
+
+        <!-- Allies or enemies: title, count at the top rank, buttons, then the factions in two columns. -->
+        <DataTemplate x:Key="GroupTemplate" DataType="factionsVm:FactionGroupViewModel">
+            <Border Margin="0,12,0,0"
+                    Padding="16,12"
+                    MinHeight="0"
+                    Theme="{StaticResource InventorySectionBorderStyle}"
+                    IsVisible="{Binding HasFactions}">
+                <StackPanel>
+                    <DockPanel LastChildFill="False">
+                        <TextBlock DockPanel.Dock="Left"
+                                   VerticalAlignment="Center"
+                                   Text="{Binding Title}"
+                                   Theme="{StaticResource SectionHeaderTextStyle}" />
+                        <Border DockPanel.Dock="Left"
+                                Margin="10,0,0,0"
+                                Theme="{StaticResource BadgeBorderStyle}"
+                                BorderBrush="{DynamicResource ControlBorderBrush}">
+                            <TextBlock Text="{Binding CountText}" FontSize="11"
+                                       Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                        </Border>
+                        <Button DockPanel.Dock="Right"
+                                MinWidth="0"
+                                MinHeight="26"
+                                Padding="10,2"
+                                Theme="{StaticResource DialogButtonStyle}"
+                                Command="{Binding SetAllToNeutralCommand}"
+                                ToolTip.Tip="Set every faction of this group to Tolerated (0)">
+                            <TextBlock Text="All Tolerated" FontSize="12" VerticalAlignment="Center" />
+                        </Button>
+                        <Button DockPanel.Dock="Right"
+                                Margin="0,0,8,0"
+                                MinWidth="0"
+                                MinHeight="26"
+                                Padding="10,2"
+                                Theme="{StaticResource DialogButtonStyle}"
+                                Command="{Binding SetAllToMaxCommand}"
+                                ToolTip.Tip="{Binding MaxTierName, StringFormat='Set every faction of this group to {0}'}">
+                            <TextBlock Text="{Binding MaxTierName, StringFormat='All {0}'}" FontSize="12" VerticalAlignment="Center" />
+                        </Button>
+                    </DockPanel>
+
+                    <ItemsControl Margin="0,10,0,0"
+                                  ItemsSource="{Binding Factions}"
+                                  ItemTemplate="{StaticResource FactionTemplate}"
+                                  Focusable="False">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <UniformGrid Columns="2" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <UserControl.Styles>
+        <Style Selector="TextBlock.factionName.changed">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="Border.tierBadge.hostile">
+            <Setter Property="BorderBrush" Value="{DynamicResource ErrorForegroundBrush}" />
+        </Style>
+        <Style Selector="Border.tierBadge.hostile TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource ErrorForegroundBrush}" />
+        </Style>
+        <!-- An invalid value shows why in its tooltip. -->
+        <Style Selector="TextBox.factionValue.error" x:DataType="factionsVm:FactionItemViewModel">
+            <Setter Property="ToolTip.Tip" Value="{Binding Error}" />
+        </Style>
+    </UserControl.Styles>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="0,16,0,16">
+            <!-- ===== Totals and the buttons for every faction ===== -->
+            <Border Padding="16,12" MinHeight="0" Theme="{StaticResource InventorySectionBorderStyle}">
+                <StackPanel>
+                    <DockPanel LastChildFill="False">
+                        <TextBlock DockPanel.Dock="Left"
+                                   VerticalAlignment="Center"
+                                   Text="Factions"
+                                   Theme="{StaticResource SectionHeaderTextStyle}" />
+                        <Button DockPanel.Dock="Right"
+                                Width="NaN"
+                                Theme="{StaticResource SubtleIconButtonStyle}"
+                                ToolTip.Tip="Undo all faction changes"
+                                AutomationProperties.Name="Undo faction changes"
+                                Command="{Binding ResetAllCommand}"
+                                IsVisible="{Binding HasChanges}">
+                            <StackPanel Orientation="Horizontal" Margin="4,0">
+                                <mi:MaterialIcon Kind="Undo" Width="16" Height="16" Foreground="{DynamicResource AccentBrush}" />
+                                <TextBlock Text="Undo all" Margin="4,0,0,0" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource AccentBrush}" />
+                            </StackPanel>
+                        </Button>
+                    </DockPanel>
+
+                    <TextBlock Margin="0,8,0,0"
+                               Text="{Binding SummaryText}"
+                               Theme="{StaticResource SecondaryTextStyle}"
+                               IsVisible="{Binding HasFactions}" />
+                    <TextBlock Margin="0,4,0,0"
+                               TextWrapping="Wrap"
+                               Theme="{StaticResource SecondaryTextStyle}"
+                               FontSize="11"
+                               Text="Negative values are infamy. Ranks: Tolerated 0, Friendly 1,500, Respected 5,000, Honored 10,000, Revered 25,000; infamy: Hostile, Despised 1,500, Hated 8,000, Nemesis 20,000." />
+
+                    <WrapPanel Margin="0,12,0,0">
+                        <Button Theme="{StaticResource AccentButtonStyle}"
+                                Command="{Binding MaxAllCommand}"
+                                Content="Allies Revered, enemies Nemesis"
+                                ToolTip.Tip="Every ally to Revered (25,000) and every enemy to Nemesis (-20,000)" />
+                    </WrapPanel>
+
+                    <TextBlock Text="{Binding StatusMessage}"
+                               Theme="{StaticResource NoteTextStyle}"
+                               IsVisible="{Binding HasStatusMessage}" />
+                </StackPanel>
+            </Border>
+
+            <ContentControl Content="{Binding Allies}" ContentTemplate="{StaticResource GroupTemplate}" Focusable="False" />
+            <ContentControl Content="{Binding Enemies}" ContentTemplate="{StaticResource GroupTemplate}" Focusable="False" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

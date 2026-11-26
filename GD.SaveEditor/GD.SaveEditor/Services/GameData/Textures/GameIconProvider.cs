@@ -1,6 +1,8 @@
+using System.Collections.Concurrent;
 using System.IO;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
+using Avalonia;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using GD.SaveEditor.Services.GameData.Archives;
 using GD.SaveEditor.Services.Settings;
 
@@ -10,10 +12,11 @@ namespace GD.SaveEditor.Services.GameData.Textures;
 public interface IGameIconProvider
 {
     /// <summary>
-    /// The texture <paramref name="resourcePath"/> (e.g. <c>items/gearhead/bitmaps/a01_head001.tex</c>) as a frozen image,
-    /// or <c>null</c> when no archive has it or it cannot be decoded. Can be called from any thread.
+    /// The texture <paramref name="resourcePath"/> (e.g. <c>items/gearhead/bitmaps/a01_head001.tex</c>) as an immutable
+    /// bitmap, or <c>null</c> when no archive has it or it cannot be decoded. Can be called from any thread; different
+    /// icons are decoded in parallel, the same icon only once.
     /// </summary>
-    ImageSource? GetIcon(string? resourcePath);
+    Bitmap? GetIcon(string? resourcePath);
 
     /// <summary>Closes the archives and forgets the icons, e.g. after the game files were downloaded again.</summary>
     void ClearCache();
@@ -24,25 +27,23 @@ public sealed class GameIconProvider(ISettingsService settingsService) : IGameIc
     /// <summary>Folders inside a game folder that have a <c>resources</c> folder; expansions first, they override.</summary>
     private static readonly string[] ContentFolders = ["gdx3", "gdx2", "gdx1", ""];
 
-    private readonly Dictionary<string, ImageSource?> _icons = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>
+    /// Decoded icons. A <see cref="Lazy{T}"/> per path: the decoding (the slow part) runs outside any lock, so icons
+    /// requested by several worker threads at once (a long item list) are decoded side by side, each one once.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, Lazy<Bitmap?>> _icons = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Opened archives; guarded by <see cref="_lock"/> (opening reads the whole file table).</summary>
     private readonly Dictionary<string, List<OpenArchive>> _archives = new(StringComparer.OrdinalIgnoreCase);
     private readonly Lock _lock = new();
 
-    public ImageSource? GetIcon(string? resourcePath)
+    public Bitmap? GetIcon(string? resourcePath)
     {
         if (string.IsNullOrWhiteSpace(resourcePath))
             return null;
 
         var path = Normalize(resourcePath);
-        lock (_lock)
-        {
-            if (_icons.TryGetValue(path, out var cached))
-                return cached;
-
-            var icon = Load(path);
-            _icons[path] = icon;
-            return icon;
-        }
+        return _icons.GetOrAdd(path, static (key, self) => new Lazy<Bitmap?>(() => self.Load(key)), this).Value;
     }
 
     public void ClearCache()
@@ -58,7 +59,7 @@ public sealed class GameIconProvider(ISettingsService settingsService) : IGameIc
 
     public void Dispose() => ClearCache();
 
-    private ImageSource? Load(string path)
+    private Bitmap? Load(string path)
     {
         // "items/gearhead/bitmaps/x.tex": the first folder names the archive (Items.arc), the rest is the file in it.
         var separator = path.IndexOf('/');
@@ -68,7 +69,11 @@ public sealed class GameIconProvider(ISettingsService settingsService) : IGameIc
         var archiveName = path[..separator] + ".arc";
         var innerPath = path[(separator + 1)..];
 
-        foreach (var archive in GetArchives(archiveName))
+        List<OpenArchive> archives;
+        lock (_lock)
+            archives = GetArchives(archiveName);
+
+        foreach (var archive in archives)
         {
             if (!archive.Entries.TryGetValue(innerPath, out var entry) && !archive.Entries.TryGetValue(path, out entry))
                 continue;
@@ -76,17 +81,25 @@ public sealed class GameIconProvider(ISettingsService settingsService) : IGameIc
             try
             {
                 var image = TexDecoder.Decode(archive.Reader.ReadFile(entry));
-                var bitmap = BitmapSource.Create(image.Width, image.Height, 96, 96, PixelFormats.Bgra32, null, image.Bgra, image.Width * 4);
-                bitmap.Freeze();
-                return bitmap;
+                return CreateBitmap(image);
             }
-            catch (Exception ex) when (ex is InvalidDataException or IOException or ArgumentException)
+            catch (Exception ex) when (ex is InvalidDataException or IOException or ArgumentException or ObjectDisposedException)
             {
                 // A texture this decoder cannot read: try another archive, else no icon.
             }
         }
 
         return null;
+    }
+
+    /// <summary>Copies the decoded BGRA pixels into an immutable bitmap (straight alpha, as the textures store it).</summary>
+    private static unsafe Bitmap CreateBitmap(DecodedImage image)
+    {
+        fixed (byte* pixels = image.Bgra)
+        {
+            return new Bitmap(PixelFormat.Bgra8888, AlphaFormat.Unpremul, (nint)pixels,
+                new PixelSize(image.Width, image.Height), new Vector(96, 96), image.Width * 4);
+        }
     }
 
     /// <summary>Every copy of <paramref name="archiveName"/> found (game folder and downloaded game files), opened once.</summary>

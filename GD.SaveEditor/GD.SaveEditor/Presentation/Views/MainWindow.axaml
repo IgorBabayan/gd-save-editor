@@ -1,0 +1,483 @@
+<Window x:Class="GD.SaveEditor.Presentation.Views.MainWindow"
+        xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:shellVm="using:GD.SaveEditor.Presentation.ViewModels.Shell"
+        xmlns:notificationsVm="using:GD.SaveEditor.Presentation.ViewModels.Notifications"
+        xmlns:models="using:GD.SaveEditor.Services.Saves.Models"
+        xmlns:notifications="using:GD.SaveEditor.Services.Notifications"
+        xmlns:mi="using:Material.Icons.Avalonia"
+        xmlns:toastViews="using:GD.SaveEditor.Presentation.Views.Toasts"
+        xmlns:characterViews="using:GD.SaveEditor.Presentation.Views.Characters"
+        xmlns:controls="using:GD.SaveEditor.Presentation.Controls"
+        mc:Ignorable="d"
+        x:DataType="shellVm:MainViewModel"
+        x:Name="Root"
+        Title="Grim Dawn Save Editor"
+        Icon="avares://GD.SaveEditor/App.ico"
+        WindowStartupLocation="CenterScreen"
+        CanMaximize="False"
+        SizeToContent="WidthAndHeight"
+        MinWidth="960"
+        MinHeight="640"
+        WindowDecorations="BorderOnly"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaTitleBarHeightHint="32"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        Foreground="{DynamicResource WindowForegroundBrush}">
+
+    <!--
+        The client area is extended over the native title bar, which keeps native behaviour on every platform (drag to
+        move, double-click, Windows snap). The window cannot be resized or maximized by the user: it sizes itself to its
+        content (SizeToContent), never below MinWidth / MinHeight nor above the screen's work area (content scrolls
+        then), and stays centered as it grows (see MainWindow.axaml.cs). Minimize / Maximize / Close are drawn in the
+        title bar; Maximize is shown disabled, as Windows does for such windows.
+    -->
+
+    <Window.Resources>
+        <!-- One row of the character list (shared by the Softcore and Hardcore tabs). -->
+        <DataTemplate x:Key="CharacterListItemTemplate" DataType="models:CharacterSave">
+            <StackPanel VerticalAlignment="Center">
+                <DockPanel LastChildFill="False">
+                    <TextBlock DockPanel.Dock="Left"
+                               Text="{Binding CharacterName}"
+                               FontSize="14"
+                               FontWeight="SemiBold"
+                               TextTrimming="CharacterEllipsis" />
+                    <Border DockPanel.Dock="Right"
+                            Theme="{StaticResource BadgeBorderStyle}"
+                            ToolTip.Tip="Solo Self-Found"
+                            IsVisible="{Binding SoloSelfFound}">
+                        <TextBlock Text="SSF"
+                                   FontSize="10"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource WarningForegroundBrush}" />
+                    </Border>
+                </DockPanel>
+                <TextBlock Margin="0,2,0,0"
+                           Theme="{StaticResource SecondaryTextStyle}"
+                           TextTrimming="CharacterEllipsis"
+                           Text="{Binding Summary}" />
+                <TextBlock Margin="0,2,0,0"
+                           FontSize="11"
+                           Theme="{StaticResource SecondaryTextStyle}"
+                           Text="{Binding LastPlayedLocal, StringFormat='Last played {0:g}', TargetNullValue='Never played'}" />
+            </StackPanel>
+        </DataTemplate>
+    </Window.Resources>
+
+    <Window.Styles>
+        <!-- Notification rows: read ones lose their dot and bold title; the icon follows the severity. -->
+        <Style Selector="Grid.notification.read Ellipse#UnreadDot">
+            <Setter Property="Opacity" Value="0" />
+        </Style>
+        <Style Selector="Grid.notification.read TextBlock#NotificationTitle">
+            <Setter Property="FontWeight" Value="Normal" />
+        </Style>
+        <Style Selector="mi|MaterialIcon.severity.success">
+            <Setter Property="Kind" Value="CheckCircleOutline" />
+            <Setter Property="Foreground" Value="{DynamicResource SuccessForegroundBrush}" />
+        </Style>
+        <Style Selector="mi|MaterialIcon.severity.warning">
+            <Setter Property="Kind" Value="AlertOutline" />
+            <Setter Property="Foreground" Value="{DynamicResource WarningForegroundBrush}" />
+        </Style>
+        <Style Selector="mi|MaterialIcon.severity.error">
+            <Setter Property="Kind" Value="AlertCircleOutline" />
+            <Setter Property="Foreground" Value="{DynamicResource ErrorForegroundBrush}" />
+        </Style>
+        <Style Selector="mi|MaterialIcon.bell">
+            <Setter Property="Kind" Value="BellOutline" />
+        </Style>
+        <Style Selector="mi|MaterialIcon.bell.unread">
+            <Setter Property="Kind" Value="Bell" />
+        </Style>
+    </Window.Styles>
+
+    <Window.KeyBindings>
+        <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveCommand}" />
+        <KeyBinding Gesture="F5" Command="{Binding ReloadCommand}" />
+    </Window.KeyBindings>
+
+    <Border x:Name="RootBorder"
+            BorderBrush="{DynamicResource WindowBorderBrush}"
+            BorderThickness="1">
+        <Grid RowDefinitions="32,*">
+
+            <!-- ===== Title bar: icon + title, free drag area, custom buttons, min / max / close ===== -->
+            <Grid x:Name="TitleBar"
+                  Grid.Row="0"
+                  ColumnDefinitions="Auto,*,Auto,Auto"
+                  Background="{DynamicResource TitleBarBackgroundBrush}"
+                  WindowDecorationProperties.ElementRole="TitleBar">
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                    <TextBlock x:Name="TitleText"
+                               Text="{Binding #Root.Title}"
+                               FontSize="12"
+                               VerticalAlignment="Center" />
+                </StackPanel>
+
+                <!-- Custom buttons placed next to the standard caption buttons -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" WindowDecorationProperties.ElementRole="User">
+                    <!-- Writes the changes of the selected character into its save file; enabled while there are any. -->
+                    <Button x:Name="SaveButton"
+                            Theme="{StaticResource TitleBarToolButtonStyle}"
+                            ToolTip.Tip="Save changes (Ctrl+S)"
+                            AutomationProperties.Name="Save changes"
+                            Command="{Binding SaveCommand}">
+                        <mi:MaterialIcon Kind="ContentSaveOutline" Width="18" Height="18" />
+                    </Button>
+
+                    <!-- Reads the selected character's save file again (e.g. after the game wrote it); asks before discarding unsaved changes. -->
+                    <Button x:Name="ReloadButton"
+                            Theme="{StaticResource TitleBarToolButtonStyle}"
+                            ToolTip.Tip="Reload the selected character (F5)"
+                            AutomationProperties.Name="Reload the selected character"
+                            Command="{Binding ReloadCommand}">
+                        <mi:MaterialIcon Kind="Refresh" Width="18" Height="18" />
+                    </Button>
+
+                    <!-- Downloads the game files and generates database.db, or migrates it with what it does not have yet. -->
+                    <Button x:Name="DatabaseButton"
+                            Theme="{StaticResource TitleBarToolButtonStyle}"
+                            ToolTip.Tip="Generate / update database"
+                            AutomationProperties.Name="Generate or update database"
+                            Command="{Binding GenerateDatabaseCommand}">
+                        <mi:MaterialIcon Kind="DatabaseRefreshOutline" Width="18" Height="18" />
+                    </Button>
+
+                    <!--
+                        Notification center. While the popup is open the toggle is not hit-testable:
+                        a click on it then only closes the popup (light dismiss) instead of reopening it.
+                    -->
+                    <ToggleButton x:Name="NotificationsButton"
+                                  DataContext="{Binding NotificationCenter}"
+                                  x:DataType="notificationsVm:NotificationCenterViewModel"
+                                  Theme="{StaticResource TitleBarToggleButtonStyle}"
+                                  ToolTip.Tip="{Binding BellToolTip}"
+                                  AutomationProperties.Name="Notifications"
+                                  IsChecked="{Binding IsOpen, Mode=TwoWay}"
+                                  IsHitTestVisible="{Binding !#NotificationsPopup.IsOpen}">
+                        <mi:MaterialIcon Classes="bell" Classes.unread="{Binding HasUnread}" Width="18" Height="18" />
+                    </ToggleButton>
+
+                    <!-- Below the bell, right edges aligned; the 8px margin holds the shadow and is compensated by the offsets. -->
+                    <Popup x:Name="NotificationsPopup"
+                           DataContext="{Binding NotificationCenter}"
+                           x:DataType="notificationsVm:NotificationCenterViewModel"
+                           PlacementTarget="{Binding #NotificationsButton}"
+                           Placement="BottomEdgeAlignedRight"
+                           HorizontalOffset="8"
+                           VerticalOffset="-6"
+                           IsLightDismissEnabled="True"
+                           IsOpen="{Binding IsOpen, Mode=TwoWay}">
+                        <Border Margin="8"
+                                Width="380"
+                                CornerRadius="8"
+                                BorderThickness="1"
+                                BorderBrush="{DynamicResource ControlBorderBrush}"
+                                Background="{DynamicResource WindowBackgroundBrush}"
+                                BoxShadow="0 2 16 0 #59000000">
+                            <Grid RowDefinitions="Auto,Auto,Auto">
+
+                                <!-- Header -->
+                                <DockPanel Grid.Row="0" Margin="14,10,8,10" LastChildFill="True">
+                                    <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Button Content="Mark all as read"
+                                                Theme="{StaticResource TextLinkButtonStyle}"
+                                                Command="{Binding MarkAllAsReadCommand}" />
+                                        <Button Content="Clear all"
+                                                Theme="{StaticResource TextLinkButtonStyle}"
+                                                Command="{Binding ClearAllCommand}" />
+                                    </StackPanel>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="Notifications" Theme="{StaticResource SectionHeaderTextStyle}" />
+                                        <Border Margin="8,0,0,0"
+                                                Padding="6,0"
+                                                MinWidth="18"
+                                                Height="18"
+                                                CornerRadius="9"
+                                                VerticalAlignment="Center"
+                                                Background="{DynamicResource AccentBrush}"
+                                                IsVisible="{Binding HasUnread}">
+                                            <TextBlock Text="{Binding UnreadCount}"
+                                                       FontSize="11"
+                                                       FontWeight="SemiBold"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource AccentForegroundBrush}" />
+                                        </Border>
+                                    </StackPanel>
+                                </DockPanel>
+
+                                <Rectangle Grid.Row="1" Height="1" Fill="{DynamicResource WindowBorderBrush}" />
+
+                                <!-- List / empty state -->
+                                <Panel Grid.Row="2">
+                                    <TextBlock Margin="16,28"
+                                               HorizontalAlignment="Center"
+                                               Text="No notifications yet."
+                                               Theme="{StaticResource SecondaryTextStyle}"
+                                               IsVisible="{Binding IsEmpty}" />
+
+                                    <ScrollViewer MaxHeight="440"
+                                                  VerticalScrollBarVisibility="Auto"
+                                                  HorizontalScrollBarVisibility="Disabled"
+                                                  IsVisible="{Binding HasNotifications}">
+                                        <ItemsControl x:Name="NotificationList" Margin="4" ItemsSource="{Binding Notifications}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="notifications:Notification">
+                                                    <Grid Classes="notification" Classes.read="{Binding IsRead}" Margin="0,1">
+                                                        <!-- Clicking the row marks it as read. -->
+                                                        <Button Theme="{StaticResource ListRowButtonStyle}"
+                                                                Command="{Binding #NotificationList.((notificationsVm:NotificationCenterViewModel)DataContext).MarkAsReadCommand}"
+                                                                CommandParameter="{Binding}">
+                                                            <!-- Unread dot, severity icon, text, room for the remove button. -->
+                                                            <Grid ColumnDefinitions="12,Auto,*,28">
+                                                                <Ellipse x:Name="UnreadDot"
+                                                                         Grid.Column="0"
+                                                                         Width="6"
+                                                                         Height="6"
+                                                                         Margin="0,7,0,0"
+                                                                         HorizontalAlignment="Left"
+                                                                         VerticalAlignment="Top"
+                                                                         Fill="{DynamicResource AccentBrush}" />
+
+                                                                <mi:MaterialIcon Classes="severity"
+                                                                                 Classes.success="{Binding Severity, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static notifications:NotificationSeverity.Success}}"
+                                                                                 Classes.warning="{Binding Severity, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static notifications:NotificationSeverity.Warning}}"
+                                                                                 Classes.error="{Binding Severity, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static notifications:NotificationSeverity.Error}}"
+                                                                                 Grid.Column="1"
+                                                                                 Width="18"
+                                                                                 Height="18"
+                                                                                 Margin="0,0,10,0"
+                                                                                 VerticalAlignment="Top"
+                                                                                 Kind="InformationOutline"
+                                                                                 Foreground="{DynamicResource AccentBrush}" />
+
+                                                                <StackPanel Grid.Column="2">
+                                                                    <TextBlock x:Name="NotificationTitle"
+                                                                               Text="{Binding Title}"
+                                                                               FontSize="13"
+                                                                               FontWeight="SemiBold"
+                                                                               TextWrapping="Wrap" />
+                                                                    <TextBlock Margin="0,2,0,0"
+                                                                               Text="{Binding Message}"
+                                                                               Theme="{StaticResource SecondaryTextStyle}"
+                                                                               IsVisible="{Binding HasMessage}" />
+                                                                    <TextBlock Margin="0,4,0,0"
+                                                                               FontSize="11"
+                                                                               Theme="{StaticResource SecondaryTextStyle}"
+                                                                               Text="{Binding CreatedAtLocal, StringFormat='{}{0:g}'}" />
+                                                                </StackPanel>
+                                                            </Grid>
+                                                        </Button>
+
+                                                        <!-- Sibling of the row button (not nested), so its click does not also mark the row as read. -->
+                                                        <Button Margin="0,6,6,0"
+                                                                HorizontalAlignment="Right"
+                                                                VerticalAlignment="Top"
+                                                                ToolTip.Tip="Remove"
+                                                                Theme="{StaticResource SubtleIconButtonStyle}"
+                                                                Command="{Binding #NotificationList.((notificationsVm:NotificationCenterViewModel)DataContext).RemoveCommand}"
+                                                                CommandParameter="{Binding}">
+                                                            <mi:MaterialIcon Kind="Close" Width="14" Height="14" />
+                                                        </Button>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </ScrollViewer>
+                                </Panel>
+                            </Grid>
+                        </Border>
+                    </Popup>
+
+                    <Button x:Name="SettingsButton"
+                            Theme="{StaticResource TitleBarToolButtonStyle}"
+                            ToolTip.Tip="Settings"
+                            AutomationProperties.Name="Settings"
+                            Command="{Binding OpenSettingsCommand}">
+                        <mi:MaterialIcon Kind="CogOutline" Width="18" Height="18" />
+                    </Button>
+                    <Rectangle Width="1" Margin="4,8" Fill="{DynamicResource WindowBorderBrush}" />
+                </StackPanel>
+
+                <!-- Standard caption buttons (hidden where the system draws its own, see WindowHelper.UseCustomChrome) -->
+                <StackPanel x:Name="CaptionButtons" Grid.Column="3" Orientation="Horizontal">
+                    <Button Theme="{StaticResource CaptionButtonStyle}"
+                            WindowDecorationProperties.ElementRole="MinimizeButton"
+                            ToolTip.Tip="Minimize"
+                            AutomationProperties.Name="Minimize"
+                            Click="OnMinimizeClick">
+                        <mi:MaterialIcon Kind="WindowMinimize" Width="16" Height="16" />
+                    </Button>
+                    <!-- Maximize: shown but always disabled, the window sizes itself (as Windows does for non-resizable windows). -->
+                    <Button x:Name="MaximizeButton"
+                            Theme="{StaticResource CaptionButtonStyle}"
+                            WindowDecorationProperties.ElementRole="User"
+                            IsEnabled="False"
+                            ToolTip.Tip="Maximize"
+                            ToolTip.ShowOnDisabled="True"
+                            AutomationProperties.Name="Maximize">
+                        <mi:MaterialIcon Kind="WindowMaximize" Width="16" Height="16" />
+                    </Button>
+                    <Button Theme="{StaticResource CloseCaptionButtonStyle}"
+                            WindowDecorationProperties.ElementRole="CloseButton"
+                            ToolTip.Tip="Close"
+                            AutomationProperties.Name="Close"
+                            Click="OnCloseClick">
+                        <mi:MaterialIcon Kind="WindowClose" Width="16" Height="16" />
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+            <!--
+                ===== Window content: characters (left) | details of the selected character (right) =====
+                Characters have a fixed width and the details take the rest (the splitter between them resizes the
+                columns). Not star ratios: the window sizes to its content, and a ratio would then squeeze the details
+                into three quarters of a width measured for both columns.
+            -->
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="280" MinWidth="220" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" MinWidth="300" />
+                </Grid.ColumnDefinitions>
+
+                <!-- ===== Characters ===== -->
+                <!-- The list fills the height the details give the window, a long list scrolls instead of growing it. -->
+                <controls:FillHeightDecorator Grid.Column="0">
+                    <Grid RowDefinitions="Auto,*,Auto" Background="{DynamicResource TitleBarBackgroundBrush}">
+
+                        <TextBlock Grid.Row="0"
+                                   Margin="16,14,16,8"
+                                   Text="Characters"
+                                   Theme="{StaticResource SectionHeaderTextStyle}" />
+
+                        <!-- Softcore / Hardcore tabs; each keeps its own selection. -->
+                        <!-- Only the pills are inset: the lists span the whole panel (a negative margin on them would be clipped). -->
+                        <TabControl Grid.Row="1"
+                                    Theme="{StaticResource PillTabControlStyle}"
+                                    SelectedIndex="{Binding SelectedCharacterTabIndex, Mode=TwoWay}"
+                                    IsVisible="{Binding HasCharacters}">
+                            <TabControl.Styles>
+                                <Style Selector="TabControl /template/ Border#Strip">
+                                    <Setter Property="Margin" Value="16,0" />
+                                </Style>
+                            </TabControl.Styles>
+                            <TabItem Header="Softcore">
+                                <Panel Margin="0,10,0,0">
+                                    <ListBox Theme="{StaticResource PlainListBoxStyle}"
+                                             ItemContainerTheme="{StaticResource ListRowItemStyle}"
+                                             ItemTemplate="{StaticResource CharacterListItemTemplate}"
+                                             ItemsSource="{Binding SoftcoreCharacters}"
+                                             SelectedItem="{Binding SelectedSoftcoreCharacter, Mode=TwoWay}"
+                                             AutomationProperties.Name="Softcore characters"
+                                             IsVisible="{Binding HasVisibleSoftcoreCharacters}" />
+
+                                    <TextBlock Margin="16,8" VerticalAlignment="Top"
+                                               Text="No softcore characters to show."
+                                               TextWrapping="Wrap"
+                                               Theme="{StaticResource SecondaryTextStyle}"
+                                               IsVisible="{Binding !HasVisibleSoftcoreCharacters}" />
+                                </Panel>
+                            </TabItem>
+
+                            <TabItem Header="Hardcore">
+                                <Panel Margin="0,10,0,0">
+                                    <ListBox Theme="{StaticResource PlainListBoxStyle}"
+                                             ItemContainerTheme="{StaticResource ListRowItemStyle}"
+                                             ItemTemplate="{StaticResource CharacterListItemTemplate}"
+                                             ItemsSource="{Binding HardcoreCharacters}"
+                                             SelectedItem="{Binding SelectedHardcoreCharacter, Mode=TwoWay}"
+                                             AutomationProperties.Name="Hardcore characters"
+                                             IsVisible="{Binding HasVisibleHardcoreCharacters}" />
+
+                                    <TextBlock Margin="16,8" VerticalAlignment="Top"
+                                               Text="No hardcore characters to show."
+                                               TextWrapping="Wrap"
+                                               Theme="{StaticResource SecondaryTextStyle}"
+                                               IsVisible="{Binding !HasVisibleHardcoreCharacters}" />
+                                </Panel>
+                            </TabItem>
+                        </TabControl>
+
+                        <!-- Empty / loading states -->
+                        <StackPanel Grid.Row="1" Margin="16,8" VerticalAlignment="Top"
+                                    IsVisible="{Binding ShowNoSaveFolder}">
+                            <TextBlock Text="No save folder selected." TextWrapping="Wrap" Theme="{StaticResource SecondaryTextStyle}" />
+                            <Button Margin="0,12,0,0"
+                                    HorizontalAlignment="Left"
+                                    Content="Open settings"
+                                    Theme="{StaticResource DialogButtonStyle}"
+                                    Command="{Binding OpenSettingsCommand}" />
+                        </StackPanel>
+
+                        <TextBlock Grid.Row="1" Margin="16,8" VerticalAlignment="Top"
+                                   Text="Loading characters…"
+                                   Theme="{StaticResource SecondaryTextStyle}"
+                                   IsVisible="{Binding ShowLoading}" />
+
+                        <TextBlock Grid.Row="1" Margin="16,8" VerticalAlignment="Top"
+                                   Text="No characters found in the save folder."
+                                   TextWrapping="Wrap"
+                                   Theme="{StaticResource SecondaryTextStyle}"
+                                   IsVisible="{Binding ShowNoCharacters}" />
+
+                        <!-- Files that could not be read -->
+                        <TextBlock Grid.Row="2"
+                                   Margin="16,8,16,12"
+                                   TextWrapping="Wrap"
+                                   Foreground="{DynamicResource WarningForegroundBrush}"
+                                   Text="{Binding LoadErrors.Count, StringFormat='{}{0} save file(s) could not be read'}"
+                                   IsVisible="{Binding HasLoadErrors}">
+                            <ToolTip.Tip>
+                                <ItemsControl ItemsSource="{Binding LoadErrors}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="models:SaveFileError">
+                                            <TextBlock Margin="0,2" TextWrapping="Wrap">
+                                                <Run Text="{Binding FilePath, Mode=OneWay}" FontWeight="SemiBold" />
+                                                <Run Text=": " />
+                                                <Run Text="{Binding Message, Mode=OneWay}" />
+                                            </TextBlock>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ToolTip.Tip>
+                        </TextBlock>
+                    </Grid>
+                </controls:FillHeightDecorator>
+
+                <!-- 1px divider with a wider, invisible grab area for resizing. -->
+                <Rectangle Grid.Column="1" Width="1" Fill="{DynamicResource WindowBorderBrush}" />
+                <GridSplitter Grid.Column="1"
+                              Width="5"
+                              Margin="-2,0"
+                              HorizontalAlignment="Center"
+                              VerticalAlignment="Stretch"
+                              ResizeDirection="Columns"
+                              ResizeBehavior="PreviousAndNext"
+                              Background="Transparent" />
+
+                <!-- ===== Details of the selected character: Character / Stash / Waypoints / Factions tabs ===== -->
+                <Panel Grid.Column="2">
+                    <TextBlock HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               Text="Select a character to see its details."
+                               Theme="{StaticResource SecondaryTextStyle}"
+                               IsVisible="{Binding ShowSelectCharacterHint}" />
+
+                    <characterViews:CharacterView DataContext="{Binding CharacterDetails}"
+                                                  Margin="24,8,24,16"
+                                                  IsVisible="{Binding #Root.((shellVm:MainViewModel)DataContext).HasSelectedCharacter}" />
+                </Panel>
+            </Grid>
+
+            <!-- ===== Toasts (bottom-right, above the content) ===== -->
+            <toastViews:ToastHost Grid.Row="1" ZIndex="10" />
+        </Grid>
+    </Border>
+</Window>

@@ -1,4 +1,4 @@
-using System.Windows;
+using Avalonia.Controls;
 using GD.SaveEditor.Presentation.ViewModels.Inventory;
 using GD.SaveEditor.Presentation.Views.Database;
 using GD.SaveEditor.Presentation.Views.Dialogs;
@@ -17,24 +17,19 @@ public sealed class DialogService(IServiceProvider services) : IDialogService
     public bool ShowSettings()
     {
         var window = services.GetRequiredService<SettingsWindow>();
-        window.Owner = WindowHelper.GetActiveWindow();
-        return window.ShowDialog() == true;
+        return WindowHelper.ShowModal<bool>(window);
     }
 
     public bool Confirm(string title, string message)
     {
-        var window = new ConfirmationWindow(title, message)
-        {
-            Owner = WindowHelper.GetActiveWindow()
-        };
-        return window.ShowDialog() == true;
+        var window = new ConfirmationWindow(title, message);
+        return WindowHelper.ShowModal<bool>(window);
     }
 
     public DatabaseGenerationResult? ShowDatabaseGenerator()
     {
         var window = services.GetRequiredService<DatabaseGeneratorWindow>();
-        window.Owner = WindowHelper.GetActiveWindow();
-        window.ShowDialog();
+        WindowHelper.ShowModal<object>(window);
         return window.Result;
     }
 
@@ -55,7 +50,7 @@ public sealed class DialogService(IServiceProvider services) : IDialogService
             viewModel.RemoveRequested += (_, _) => removed();
 
         // Next to the item; the expand button swaps it for the full window over the same view model.
-        if (anchor is FrameworkElement element
+        if (anchor is Control element
             && ItemInspectorAdorner.TryShow(element, viewModel, applied, vm => ShowItemBuilderWindow(vm)))
             return;
 
@@ -77,11 +72,8 @@ public sealed class DialogService(IServiceProvider services) : IDialogService
     /// <summary>The full builder window (modal) over <paramref name="viewModel"/>; the built item, or <c>null</c>.</summary>
     private static BuiltItem? ShowItemBuilderWindow(ItemBuilderViewModel viewModel)
     {
-        var window = new ItemBuilderWindow(viewModel)
-        {
-            Owner = WindowHelper.GetActiveWindow()
-        };
-        window.ShowDialog();
+        var window = new ItemBuilderWindow(viewModel);
+        WindowHelper.ShowModal<object>(window);
         return window.Result;
     }
 }

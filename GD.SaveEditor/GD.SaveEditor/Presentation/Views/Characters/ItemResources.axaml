@@ -1,0 +1,161 @@
+<!--
+    Resources shared by the equipment screen and the bags: the colors of the game's item screens and the item tooltip.
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:charactersVm="using:GD.SaveEditor.Presentation.ViewModels.Characters"
+                    xmlns:converters="using:GD.SaveEditor.Presentation.Converters">
+
+    <converters:ItemRarityToBrushConverter x:Key="RarityBrush" />
+
+    <!-- Colors of the equipment screen: dark like the game, the same in every theme. -->
+    <SolidColorBrush x:Key="DollBackgroundBrush" Color="#16120F" />
+    <SolidColorBrush x:Key="SlotBackgroundBrush" Color="#1E1A20" />
+    <SolidColorBrush x:Key="SlotBorderBrush" Color="#3B3542" />
+    <SolidColorBrush x:Key="SlotLabelBrush" Color="#5E5866" />
+    <SolidColorBrush x:Key="DollTextBrush" Color="#E8DCC0" />
+    <SolidColorBrush x:Key="DollSecondaryTextBrush" Color="#A49A88" />
+
+    <!-- Colors of the item tooltip, taken from the game's. -->
+    <SolidColorBrush x:Key="TooltipTypeBrush" Color="#D9A441" />
+    <SolidColorBrush x:Key="TooltipStatBrush" Color="#C9BCA3" />
+    <SolidColorBrush x:Key="TooltipRangeBrush" Color="#7F7566" />
+    <SolidColorBrush x:Key="TooltipSkillBrush" Color="#6AA2FF" />
+    <SolidColorBrush x:Key="TooltipMutedBrush" Color="#8C8273" />
+
+    <!-- Hides a text that has nothing to show (null bindings become empty texts). -->
+    <ControlTheme x:Key="OptionalTooltipText" TargetType="TextBlock">
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="IsVisible" Value="{Binding $self.Text, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+    </ControlTheme>
+
+    <ControlTheme x:Key="OptionalTooltipList" TargetType="ItemsControl">
+        <Setter Property="IsVisible" Value="{Binding $self.ItemCount, Converter={x:Static converters:AppConverters.IsPositive}}" />
+    </ControlTheme>
+
+    <!-- "+54% Elemental Damage [50-61]"; skill bonuses in the skill color. -->
+    <DataTemplate x:Key="TooltipStatLineTemplate" DataType="charactersVm:ItemTooltipLine">
+        <TextBlock FontSize="12.5"
+                   TextWrapping="Wrap"
+                   Margin="12,1,0,1"
+                   Foreground="{StaticResource TooltipStatBrush}"
+                   Classes.skill="{Binding IsSkill}">
+            <TextBlock.Styles>
+                <Style Selector="TextBlock.skill">
+                    <Setter Property="Foreground" Value="{StaticResource TooltipSkillBrush}" />
+                </Style>
+            </TextBlock.Styles>
+            <Run Text="{Binding Text, Mode=OneWay}" /><Run Text="{Binding RangeText, Mode=OneWay}" Foreground="{StaticResource TooltipRangeBrush}" />
+        </TextBlock>
+    </DataTemplate>
+
+    <!--
+        Contents of an item's tooltip, laid out like the game's: name in its rarity color, type, base values, the merged
+        stats and skill bonuses, component and augment with their stats, requirements; the editor's details at the
+        bottom. Used by the tooltip of bag and equipment items and by the preview of the item builder.
+    -->
+    <DataTemplate x:Key="ItemTooltipContentTemplate" DataType="charactersVm:EquipmentSlotViewModel">
+        <StackPanel>
+            <!-- Name, type, base values -->
+            <StackPanel Orientation="Horizontal">
+                <Image Source="{Binding Icon}"
+                       Width="28" Height="28"
+                       Margin="0,0,8,0"
+                       VerticalAlignment="Top"
+                       RenderOptions.BitmapInterpolationMode="HighQuality"
+                       IsVisible="{Binding HasIcon}" />
+                <TextBlock Text="{Binding Name}"
+                           MaxWidth="360"
+                           FontSize="16"
+                           FontWeight="SemiBold"
+                           TextWrapping="Wrap"
+                           VerticalAlignment="Center"
+                           Foreground="{Binding Rarity, Converter={StaticResource RarityBrush}}" />
+            </StackPanel>
+            <TextBlock Text="{Binding TypeText}" Margin="0,2,0,0" FontSize="13" Theme="{StaticResource OptionalTooltipText}" Foreground="{StaticResource TooltipTypeBrush}" />
+            <ItemsControl ItemsSource="{Binding BaseLines}" Theme="{StaticResource OptionalTooltipList}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="charactersVm:ItemTooltipLine">
+                        <TextBlock Text="{Binding Text}" FontSize="13" Foreground="{StaticResource DollTextBrush}" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Stats and skill bonuses of the item and its affixes -->
+            <ItemsControl ItemsSource="{Binding StatLines}"
+                          Margin="0,8,0,0"
+                          Theme="{StaticResource OptionalTooltipList}"
+                          ItemTemplate="{StaticResource TooltipStatLineTemplate}" />
+
+            <TextBlock Text="{Binding SetText}" Margin="0,8,0,0" FontSize="12.5" Theme="{StaticResource OptionalTooltipText}" Foreground="#4CE03C" />
+
+            <!-- Component and augment -->
+            <ItemsControl ItemsSource="{Binding Sections}" Theme="{StaticResource OptionalTooltipList}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="charactersVm:ItemTooltipSection">
+                        <StackPanel Margin="0,10,0,0">
+                            <TextBlock Text="{Binding Name}"
+                                       FontSize="14"
+                                       FontWeight="SemiBold"
+                                       TextWrapping="Wrap"
+                                       Foreground="{Binding Rarity, Converter={StaticResource RarityBrush}}" />
+                            <TextBlock Text="{Binding Kind}" FontSize="12.5" Foreground="{StaticResource DollTextBrush}" />
+                            <ItemsControl ItemsSource="{Binding Lines}"
+                                          Margin="0,4,0,0"
+                                          Theme="{StaticResource OptionalTooltipList}"
+                                          ItemTemplate="{StaticResource TooltipStatLineTemplate}" />
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <TextBlock Text="{Binding IllusionText}" Margin="0,8,0,0" FontSize="12.5" Theme="{StaticResource OptionalTooltipText}" Foreground="{StaticResource TooltipMutedBrush}" />
+
+            <!-- Requirements -->
+            <TextBlock Text="{Binding RequirementText}" Margin="0,10,0,0" FontSize="12.5" Theme="{StaticResource OptionalTooltipText}" Foreground="{StaticResource TooltipMutedBrush}" />
+
+            <!-- Editor details: roll note, unknown records, record and seed -->
+            <Border Margin="0,10,0,0" Padding="0,6,0,0" BorderThickness="0,1,0,0" BorderBrush="#2E2A33">
+                <StackPanel>
+                    <TextBlock Text="{Binding RollNote}" Margin="0,0,0,4" FontSize="11" FontStyle="Italic" Theme="{StaticResource OptionalTooltipText}" Foreground="{StaticResource TooltipRangeBrush}" />
+                    <ItemsControl ItemsSource="{Binding Details}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="charactersVm:ItemDetailLine">
+                                <TextBlock FontSize="11" TextWrapping="Wrap" Margin="0,1" Foreground="{StaticResource TooltipRangeBrush}">
+                                    <Run Text="{Binding Label, Mode=OneWay}" /><Run Text=": " /><Run Text="{Binding Value, Mode=OneWay}" Foreground="{StaticResource TooltipMutedBrush}" />
+                                </TextBlock>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </DataTemplate>
+
+    <!--
+        Tooltip of an item: the contents above in a dark box framed in the item's rarity color. Set as ToolTip.Tip of
+        an element whose data context is an EquipmentSlotViewModel; the content is only built when the tooltip opens.
+    -->
+    <ControlTheme x:Key="ItemToolTipTheme" TargetType="ToolTip">
+        <Setter Property="MaxWidth" Value="420" />
+        <Setter Property="Padding" Value="14,10" />
+        <Setter Property="Background" Value="#F2100E12" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Foreground" Value="{StaticResource DollTextBrush}" />
+        <Setter Property="ContentTemplate" Value="{StaticResource ItemTooltipContentTemplate}" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Name="PART_LayoutRoot"
+                        Padding="{TemplateBinding Padding}"
+                        CornerRadius="2"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        Background="{TemplateBinding Background}">
+                    <ContentPresenter Name="PART_ContentPresenter"
+                                      Content="{TemplateBinding Content}"
+                                      ContentTemplate="{TemplateBinding ContentTemplate}" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </ControlTheme>
+</ResourceDictionary>

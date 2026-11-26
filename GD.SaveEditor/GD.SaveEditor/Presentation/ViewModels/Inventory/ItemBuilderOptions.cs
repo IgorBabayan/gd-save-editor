@@ -1,6 +1,5 @@
-using System.Windows;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
+using Avalonia.Media.Imaging;
+using Avalonia.Threading;
 using GD.SaveEditor.Services.GameData.Database;
 using GD.SaveEditor.Services.GameData.Items;
 using GD.SaveEditor.Services.GameData.Textures;
@@ -43,6 +42,10 @@ public sealed partial class ItemOptionViewModel(CatalogItem item, IGameIconProvi
     /// <summary>Group header of the list: the item type ("Helm", "Component", ...).</summary>
     public string GroupName => Item.TypeLabel;
 
+    /// <summary>Name, type, set and record path in upper case, built once: the search scans it for each typed word.</summary>
+    internal string SearchKey { get; } = string.Join('\n', item.Name, item.TypeLabel, item.SetName ?? string.Empty, item.RecordPath)
+        .ToUpperInvariant();
+
     public ItemRarity Rarity => Item.Rarity;
 
     /// <summary>"Epic Helm · Level 94 · Set: Aleksander's Regalia".</summary>
@@ -64,7 +67,7 @@ public sealed partial class ItemOptionViewModel(CatalogItem item, IGameIconProvi
     public string RecordPath => Item.RecordPath;
 
     /// <summary>The icon; reading it starts when the row first asks for it.</summary>
-    public ImageSource? Icon
+    public Bitmap? Icon
     {
         get
         {
@@ -78,10 +81,10 @@ public sealed partial class ItemOptionViewModel(CatalogItem item, IGameIconProvi
         }
     }
 
-    private ImageSource? _icon;
+    private Bitmap? _icon;
 
     /// <summary>Reads the icon now (the builder needs it to tell the item's size); <c>null</c> when it cannot be read.</summary>
-    public ImageSource? GetIconNow()
+    public Bitmap? GetIconNow()
     {
         _icon ??= SafeGetIcon();
         _iconRequested = true;
@@ -89,22 +92,22 @@ public sealed partial class ItemOptionViewModel(CatalogItem item, IGameIconProvi
     }
 
     /// <summary>Cells the item covers in a bag: the game draws item icons at 32 pixels per cell.</summary>
-    public (int Columns, int Rows)? GetSize() => GetIconNow() is BitmapSource bitmap
-        ? (Math.Clamp((int)Math.Round(bitmap.PixelWidth / InventoryItemViewModel.CellSize), 1, 4),
-           Math.Clamp((int)Math.Round(bitmap.PixelHeight / InventoryItemViewModel.CellSize), 1, 4))
+    public (int Columns, int Rows)? GetSize() => GetIconNow() is { } bitmap
+        ? (Math.Clamp((int)Math.Round(bitmap.PixelSize.Width / InventoryItemViewModel.CellSize), 1, 4),
+           Math.Clamp((int)Math.Round(bitmap.PixelSize.Height / InventoryItemViewModel.CellSize), 1, 4))
         : null;
 
     private async Task LoadIconAsync()
     {
         var icon = await Task.Run(SafeGetIcon);
         _icon ??= icon;
-        if (Application.Current?.Dispatcher is { } dispatcher && !dispatcher.CheckAccess())
-            await dispatcher.InvokeAsync(() => OnPropertyChanged(nameof(Icon)));
+        if (!Dispatcher.UIThread.CheckAccess())
+            Dispatcher.UIThread.Post(() => OnPropertyChanged(nameof(Icon)));
         else
             OnPropertyChanged(nameof(Icon));
     }
 
-    private ImageSource? SafeGetIcon()
+    private Bitmap? SafeGetIcon()
     {
         try
         {
@@ -127,6 +130,9 @@ public sealed class PartOptionViewModel(CatalogPart part, string groupName)
 
     /// <summary>Group header of the picker ("Rare affixes", "Rolls on this relic", ...).</summary>
     public string GroupName { get; } = groupName;
+
+    /// <summary>Name, summary, code and group in upper case, built once: the search scans it for each typed word.</summary>
+    internal string SearchKey { get; } = string.Join('\n', part.Name, part.Summary, part.Code, groupName).ToUpperInvariant();
 
     public ItemRarity Rarity => Part.Rarity;
 
@@ -198,4 +204,42 @@ public sealed partial class ItemPartSlotViewModel : ViewModelBase
 
     [RelayCommand]
     private void Remove() => _remove(this);
+}
+
+/// <summary>Header row of a grouped list ("Helm", "Rare prefixes", ...): shown above its items, never selected.</summary>
+public sealed record ListGroupHeader(string Name)
+{
+    /// <summary>
+    /// Rows of <paramref name="items"/> grouped by <paramref name="groupOf"/>: each group's header, then its items. Groups
+    /// keep the order in which they first appear, items their order inside a group (like a grouped WPF collection view).
+    /// </summary>
+    public static IReadOnlyList<object> Group<T>(IReadOnlyList<T> items, Func<T, string> groupOf) where T : notnull
+    {
+        if (items.Count == 0)
+            return [];
+
+        var groups = new Dictionary<string, List<T>>(StringComparer.Ordinal);
+        var order = new List<string>();
+        foreach (var item in items)
+        {
+            var name = groupOf(item);
+            if (!groups.TryGetValue(name, out var members))
+            {
+                groups[name] = members = [];
+                order.Add(name);
+            }
+
+            members.Add(item);
+        }
+
+        var rows = new List<object>(items.Count + order.Count);
+        foreach (var name in order)
+        {
+            rows.Add(new ListGroupHeader(name));
+            foreach (var item in groups[name])
+                rows.Add(item);
+        }
+
+        return rows;
+    }
 }

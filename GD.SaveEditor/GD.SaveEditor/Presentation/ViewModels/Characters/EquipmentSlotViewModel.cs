@@ -1,5 +1,5 @@
 using System.IO;
-using System.Windows.Media;
+using Avalonia.Media.Imaging;
 using GD.SaveEditor.Services.GameData.Database;
 using GD.SaveEditor.Services.GameData.Items;
 using GD.SaveEditor.Services.GameData.Textures;
@@ -77,7 +77,7 @@ public sealed partial class EquipmentSlotViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasIcon))]
-    private ImageSource? _icon;
+    private Bitmap? _icon;
 
     public bool HasIcon => Icon is not null;
 
