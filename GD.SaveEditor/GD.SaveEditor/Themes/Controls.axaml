@@ -713,7 +713,8 @@
         <Setter Property="Template">
             <ControlTemplate>
                 <DockPanel>
-                    <Border DockPanel.Dock="Top"
+                    <Border Name="Strip"
+                            DockPanel.Dock="Top"
                             HorizontalAlignment="Left"
                             Padding="3"
                             CornerRadius="8"

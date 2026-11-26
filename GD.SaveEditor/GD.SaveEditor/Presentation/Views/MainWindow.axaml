@@ -358,14 +358,18 @@
                                    Theme="{StaticResource SectionHeaderTextStyle}" />
 
                         <!-- Softcore / Hardcore tabs; each keeps its own selection. -->
+                        <!-- Only the pills are inset: the lists span the whole panel (a negative margin on them would be clipped). -->
                         <TabControl Grid.Row="1"
-                                    Margin="16,0"
                                     Theme="{StaticResource PillTabControlStyle}"
                                     SelectedIndex="{Binding SelectedCharacterTabIndex, Mode=TwoWay}"
                                     IsVisible="{Binding HasCharacters}">
+                            <TabControl.Styles>
+                                <Style Selector="TabControl /template/ Border#Strip">
+                                    <Setter Property="Margin" Value="16,0" />
+                                </Style>
+                            </TabControl.Styles>
                             <TabItem Header="Softcore">
-                                <!-- Negative side margins undo the TabControl margin, so the list spans the whole panel. -->
-                                <Panel Margin="-16,10,-16,0">
+                                <Panel Margin="0,10,0,0">
                                     <ListBox Theme="{StaticResource PlainListBoxStyle}"
                                              ItemContainerTheme="{StaticResource ListRowItemStyle}"
                                              ItemTemplate="{StaticResource CharacterListItemTemplate}"
@@ -383,8 +387,7 @@
                             </TabItem>
 
                             <TabItem Header="Hardcore">
-                                <!-- Negative side margins undo the TabControl margin, so the list spans the whole panel. -->
-                                <Panel Margin="-16,10,-16,0">
+                                <Panel Margin="0,10,0,0">
                                     <ListBox Theme="{StaticResource PlainListBoxStyle}"
                                              ItemContainerTheme="{StaticResource ListRowItemStyle}"
                                              ItemTemplate="{StaticResource CharacterListItemTemplate}"
