@@ -1,5 +1,5 @@
 using System.Collections.ObjectModel;
-using System.Windows.Media.Imaging;
+using Avalonia.Media.Imaging;
 using GD.SaveEditor.Presentation.ViewModels.Characters;
 using GD.SaveEditor.Services.Saves;
 using GD.SaveEditor.Services.Saves.Models;
@@ -96,7 +96,7 @@ public sealed partial class InventoryItemViewModel : ViewModelBase
 
         CurrentItem = OriginalItem;
         SetView(_originalView);
-        if (_originalView.Icon is BitmapSource)
+        if (_originalView.Icon is Bitmap)
         {
             UpdateSize();
         }
@@ -170,10 +170,10 @@ public sealed partial class InventoryItemViewModel : ViewModelBase
     /// <summary>The game's item icons are 32 pixels per cell: a 64 x 96 helm covers 2 x 3 cells.</summary>
     private void UpdateSize()
     {
-        if (Item.Icon is not BitmapSource bitmap)
+        if (Item.Icon is not { } bitmap)
             return;
 
-        SetSize((int)Math.Round(bitmap.PixelWidth / CellSize), (int)Math.Round(bitmap.PixelHeight / CellSize));
+        SetSize((int)Math.Round(bitmap.PixelSize.Width / CellSize), (int)Math.Round(bitmap.PixelSize.Height / CellSize));
     }
 }
 
@@ -244,9 +244,27 @@ public sealed partial class InventoryBagViewModel : ViewModelBase
     public int Rows { get; }
 
     /// <summary>Size of the grid: the bag's size, larger when an item reaches past it.</summary>
-    public double PixelWidth => Math.Max(Columns, Items.Select(i => i.X + i.Columns).DefaultIfEmpty(0).Max()) * InventoryItemViewModel.CellSize;
+    public double PixelWidth
+    {
+        get
+        {
+            var cells = Columns;
+            foreach (var item in Items)
+                cells = Math.Max(cells, item.X + item.Columns);
+            return cells * InventoryItemViewModel.CellSize;
+        }
+    }
 
-    public double PixelHeight => Math.Max(Rows, Items.Select(i => i.Y + i.Rows).DefaultIfEmpty(0).Max()) * InventoryItemViewModel.CellSize;
+    public double PixelHeight
+    {
+        get
+        {
+            var cells = Rows;
+            foreach (var item in Items)
+                cells = Math.Max(cells, item.Y + item.Rows);
+            return cells * InventoryItemViewModel.CellSize;
+        }
+    }
 
     #region Drop preview
 

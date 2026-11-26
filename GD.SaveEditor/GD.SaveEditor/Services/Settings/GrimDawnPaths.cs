@@ -1,4 +1,5 @@
 using System.IO;
+using System.Runtime.Versioning;
 using System.Text.RegularExpressions;
 using Microsoft.Win32;
 
@@ -15,10 +16,60 @@ public static partial class GrimDawnPaths
     /// <summary>
     /// Default location of the character saves: <c>Documents\My Games\Grim Dawn\save\main</c>.
     /// The Documents folder follows OneDrive redirection (e.g. <c>C:\Users\omega\OneDrive\Documents</c>).
+    /// On Linux the game runs in Proton (Steam Play), so the saves are inside its Wine prefix; the first prefix that
+    /// has them wins, else the Documents folder is used.
     /// </summary>
-    public static string DefaultSaveFolder => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-        "My Games", "Grim Dawn", "save", "main");
+    public static string DefaultSaveFolder =>
+        OperatingSystem.IsWindows()
+            ? DocumentsSaveFolder
+            : GetProtonSaveFolders().FirstOrDefault(Directory.Exists) ?? DocumentsSaveFolder;
+
+    private static string DocumentsSaveFolder => Path.Combine(DocumentsFolder, "My Games", "Grim Dawn", "save", "main");
+
+    /// <summary>
+    /// The Documents folder. On Linux .NET gives the home folder when no XDG documents folder is set up, so
+    /// <c>~/Documents</c> is used there when it exists.
+    /// </summary>
+    private static string DocumentsFolder
+    {
+        get
+        {
+            var documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            if (OperatingSystem.IsWindows())
+                return documents;
+
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            var homeDocuments = Path.Combine(home, "Documents");
+            return string.Equals(Path.TrimEndingDirectorySeparator(documents), Path.TrimEndingDirectorySeparator(home), StringComparison.Ordinal)
+                   && Directory.Exists(homeDocuments)
+                ? homeDocuments
+                : documents;
+        }
+    }
+
+    /// <summary><c>save\main</c> inside the Proton prefix of Grim Dawn in every Steam library.</summary>
+    private static IEnumerable<string> GetProtonSaveFolders() =>
+        GetUnixSteamFolders()
+            .SelectMany(GetSteamLibraries)
+            .Select(library => Path.Combine(library, "steamapps", "compatdata", SteamAppId, "pfx", "drive_c", "users",
+                "steamuser", "Documents", "My Games", "Grim Dawn", "save", "main"));
+
+    /// <summary>Where Steam lives on Linux (native and Flatpak) and macOS.</summary>
+    private static IEnumerable<string> GetUnixSteamFolders()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        if (string.IsNullOrEmpty(home))
+            return [];
+
+        return new[]
+            {
+                Path.Combine(home, ".steam", "steam"),
+                Path.Combine(home, ".local", "share", "Steam"),
+                Path.Combine(home, ".var", "app", "com.valvesoftware.Steam", ".local", "share", "Steam"),
+                Path.Combine(home, "Library", "Application Support", "Steam")
+            }
+            .Where(Directory.Exists);
+    }
 
     /// <summary>
     /// The Grim Dawn installation folder found on this computer (Steam libraries, then GOG), or <c>null</c>.
@@ -34,6 +85,14 @@ public static partial class GrimDawnPaths
 
     private static IEnumerable<string> GetCandidateGameFolders()
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            // Steam Play / Proton installs the Windows version into a regular Steam library.
+            foreach (var library in GetUnixSteamFolders().SelectMany(GetSteamLibraries))
+                yield return Path.Combine(library, "steamapps", "common", "Grim Dawn");
+            yield break;
+        }
+
         if (ReadRegistry(RegistryHive.LocalMachine, $@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Steam App {SteamAppId}", "InstallLocation") is { } steamUninstall)
             yield return steamUninstall;
 
@@ -62,7 +121,7 @@ public static partial class GrimDawnPaths
             if (File.Exists(vdf))
             {
                 foreach (Match match in VdfPathRegex().Matches(File.ReadAllText(vdf)))
-                    libraries.Add(match.Groups[1].Value.Replace(@"\\", @"\"));
+                    libraries.Add(match.Groups[1].Value.Replace(@"\\", @"\").Replace('\\', Path.DirectorySeparatorChar));
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -70,10 +129,11 @@ public static partial class GrimDawnPaths
             // Only the default library is searched then.
         }
 
-        return libraries.Distinct(StringComparer.OrdinalIgnoreCase);
+        return libraries.Distinct(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
     }
 
     /// <summary>Reads a string from the 64-bit view, then from the 32-bit view of the registry.</summary>
+    [SupportedOSPlatform("windows")]
     private static string? ReadRegistry(RegistryHive hive, string keyPath, string valueName)
     {
         foreach (var view in new[] { RegistryView.Registry64, RegistryView.Registry32 })

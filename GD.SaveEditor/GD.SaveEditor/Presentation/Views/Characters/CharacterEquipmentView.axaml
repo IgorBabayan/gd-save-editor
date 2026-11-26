@@ -1,0 +1,307 @@
+<UserControl x:Class="GD.SaveEditor.Presentation.Views.Characters.CharacterEquipmentView"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:charactersVm="using:GD.SaveEditor.Presentation.ViewModels.Characters"
+             xmlns:local="using:GD.SaveEditor.Presentation.Views.Characters"
+             xmlns:mi="using:Material.Icons.Avalonia"
+             mc:Ignorable="d"
+             x:DataType="charactersVm:CharacterEquipmentViewModel"
+             d:DesignHeight="700" d:DesignWidth="900">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceInclude Source="avares://GD.SaveEditor/Presentation/Views/Characters/ItemResources.axaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!--
+                One equipment slot. The frame takes the item's rarity color with a soft glow behind the icon;
+                without an icon (database or Items.arc missing) the item name is shown, an empty slot shows its label.
+            -->
+            <DataTemplate x:Key="EquipmentSlotTemplate" DataType="charactersVm:EquipmentSlotViewModel">
+                <Border Classes="slotFrame"
+                        Classes.empty="{Binding IsEmpty}"
+                        CornerRadius="3"
+                        BorderThickness="2"
+                        Background="{StaticResource SlotBackgroundBrush}"
+                        ToolTip.ShowDelay="150">
+                    <ToolTip.Tip>
+                        <ToolTip Theme="{StaticResource ItemToolTipTheme}"
+                                 Content="{Binding}"
+                                 BorderBrush="{Binding Rarity, Converter={StaticResource RarityBrush}}" />
+                    </ToolTip.Tip>
+                    <Panel ClipToBounds="True">
+                        <Border Background="{Binding Rarity, Converter={StaticResource RarityBrush}, ConverterParameter=Glow}"
+                                IsVisible="{Binding !IsEmpty}" />
+
+                        <Image Source="{Binding Icon}"
+                               Margin="4"
+                               Stretch="Uniform"
+                               StretchDirection="DownOnly"
+                               RenderOptions.BitmapInterpolationMode="HighQuality"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center" />
+
+                        <TextBlock Text="{Binding Name}"
+                                   Margin="4"
+                                   FontSize="10"
+                                   TextAlignment="Center"
+                                   TextWrapping="Wrap"
+                                   TextTrimming="CharacterEllipsis"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Foreground="{Binding Rarity, Converter={StaticResource RarityBrush}}">
+                            <TextBlock.IsVisible>
+                                <MultiBinding Converter="{x:Static BoolConverters.And}">
+                                    <Binding Path="!HasIcon" />
+                                    <Binding Path="!IsEmpty" />
+                                </MultiBinding>
+                            </TextBlock.IsVisible>
+                        </TextBlock>
+
+                        <TextBlock Text="{Binding Label}"
+                                   IsVisible="{Binding IsEmpty}"
+                                   Margin="2"
+                                   FontSize="10"
+                                   TextAlignment="Center"
+                                   TextWrapping="Wrap"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Foreground="{StaticResource SlotLabelBrush}" />
+                    </Panel>
+                </Border>
+            </DataTemplate>
+
+            <!--
+                A slot of the equipment screen. While the equipment can be changed, a click opens the item inspector on
+                the slot (change or take off its item, or build one for an empty slot); a right-click opens its menu
+                (handled in code-behind, which finds the slots by their "slot" class).
+            -->
+            <ControlTheme x:Key="SlotStyle" TargetType="ContentControl">
+                <Setter Property="ContentTemplate" Value="{StaticResource EquipmentSlotTemplate}" />
+                <Setter Property="Focusable" Value="False" />
+                <Setter Property="Template">
+                    <ControlTemplate>
+                        <ContentPresenter Name="PART_ContentPresenter"
+                                          Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}" />
+                    </ControlTemplate>
+                </Setter>
+            </ControlTheme>
+
+            <!-- Swap button of the weapon sets, styled like a small slot. -->
+            <ControlTheme x:Key="SwapButtonStyle" TargetType="Button">
+                <Setter Property="Foreground" Value="#D9B45A" />
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="Template">
+                    <ControlTemplate>
+                        <Border Name="Bd"
+                                CornerRadius="3"
+                                BorderThickness="2"
+                                BorderBrush="{StaticResource SlotBorderBrush}"
+                                Background="{StaticResource SlotBackgroundBrush}">
+                            <ContentPresenter Name="PART_ContentPresenter"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              Content="{TemplateBinding Content}"
+                                              ContentTemplate="{TemplateBinding ContentTemplate}" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter>
+                <Style Selector="^:pointerover /template/ Border#Bd">
+                    <Setter Property="BorderBrush" Value="#D9B45A" />
+                </Style>
+                <Style Selector="^:pressed /template/ Border#Bd">
+                    <Setter Property="Background" Value="#2A2430" />
+                </Style>
+            </ControlTheme>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <UserControl.Styles>
+        <Style Selector="Border.slotFrame" x:DataType="charactersVm:EquipmentSlotViewModel">
+            <Setter Property="BorderBrush" Value="{Binding Rarity, Converter={StaticResource RarityBrush}}" />
+        </Style>
+        <!-- An empty slot: plain frame, no tooltip. -->
+        <Style Selector="Border.slotFrame.empty">
+            <Setter Property="BorderBrush" Value="{StaticResource SlotBorderBrush}" />
+            <Setter Property="ToolTip.ServiceEnabled" Value="False" />
+        </Style>
+        <Style Selector="StackPanel.editable ContentControl.slot">
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+    </UserControl.Styles>
+
+    <!-- No ScrollViewer here: the Character tab scrolls the equipment and the bags together (CharacterView). -->
+    <StackPanel Margin="0,16,0,0" Classes.editable="{Binding CanEditItems}">
+
+        <!-- The part of the save file after the header could not be read. -->
+        <Border Margin="0,0,0,12"
+                Padding="12,8"
+                CornerRadius="6"
+                BorderThickness="1"
+                BorderBrush="{DynamicResource ErrorForegroundBrush}"
+                IsVisible="{Binding HasError}">
+            <!-- MaxWidth: the window sizes to its content, a long message must wrap rather than widen it. -->
+            <TextBlock MaxWidth="900" HorizontalAlignment="Left" Text="{Binding ErrorText}" TextWrapping="Wrap" Foreground="{DynamicResource ErrorForegroundBrush}" />
+        </Border>
+
+        <!-- Names and icons need database.db. -->
+        <Border Margin="0,0,0,12"
+                Padding="12,8"
+                CornerRadius="6"
+                BorderThickness="1"
+                BorderBrush="{DynamicResource WarningForegroundBrush}"
+                IsVisible="{Binding ShowDatabaseHint}">
+            <TextBlock MaxWidth="900"
+                       HorizontalAlignment="Left"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource WarningForegroundBrush}"
+                       Text="Items are shown by their record names. Generate the game database (database button in the title bar) to see item names and icons." />
+        </Border>
+
+        <WrapPanel Orientation="Horizontal">
+
+            <!-- ===== Equipment screen ===== -->
+            <Border Margin="0,0,16,16"
+                    Padding="14"
+                    CornerRadius="6"
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource ControlBorderBrush}"
+                    Background="{StaticResource DollBackgroundBrush}">
+                <Grid ColumnDefinitions="84,12,300,12,84">
+
+                    <!-- Left column: weapon, chest, legs -->
+                    <StackPanel Grid.Column="0">
+                        <ContentControl Classes="slot" Theme="{StaticResource SlotStyle}" Content="{Binding MainHand}" Width="84" Height="150" />
+                        <ContentControl Classes="slot" Theme="{StaticResource SlotStyle}" Content="{Binding Chest}" Width="84" Height="130" Margin="0,8,0,0" />
+                        <ContentControl Classes="slot" Theme="{StaticResource SlotStyle}" Content="{Binding Legs}" Width="84" Height="130" Margin="0,8,0,0" />
+                    </StackPanel>
+
+                    <!-- Center: relic / head / amulet and medal, the character, rings and belt -->
+                    <Grid Grid.Column="2" RowDefinitions="84,*,44">
+
+                        <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Center">
+                            <StackPanel>
+                                <Button Theme="{StaticResource SwapButtonStyle}"
+                                        Width="40" Height="40"
+                                        Command="{Binding SwapWeaponSetCommand}"
+                                        ToolTip.Tip="Show the other weapon set">
+                                    <mi:MaterialIcon Kind="SwapHorizontal" Width="22" Height="22" />
+                                </Button>
+                                <ContentControl Classes="slot" Theme="{StaticResource SlotStyle}" Content="{Binding Relic}" Width="40" Height="40" Margin="0,4,0,0" />
+                            </StackPanel>
+                            <ContentControl Classes="slot" Theme="{StaticResource SlotStyle}" Content="{Binding Head}" Width="84" Height="84" Margin="10,0" />
+                            <StackPanel>
+                                <ContentControl Classes="slot" Theme="{StaticResource SlotStyle}" Content="{Binding Amulet}" Width="40" Height="40" />
+                                <ContentControl Classes="slot" Theme="{StaticResource SlotStyle}" Content="{Binding Medal}" Width="40" Height="40" Margin="0,4,0,0" />
+                            </StackPanel>
+                        </StackPanel>
+
+                        <!-- The character (the game's 3D model is replaced by name, class and weapon set). -->
+                        <Border Grid.Row="1" Margin="0,8" CornerRadius="4" BorderThickness="1" BorderBrush="#2A2430">
+                            <Border.Background>
+                                <RadialGradientBrush GradientOrigin="50%,40%" Center="50%,40%" RadiusX="70%" RadiusY="60%">
+                                    <GradientStop Color="#3A2026" Offset="0" />
+                                    <GradientStop Color="#1C1416" Offset="0.6" />
+                                    <GradientStop Color="#120E0D" Offset="1" />
+                                </RadialGradientBrush>
+                            </Border.Background>
+                            <Grid>
+                                <mi:MaterialIcon Kind="ShieldSwordOutline"
+                                                  Width="150" Height="150"
+                                                  Opacity="0.08"
+                                                  Foreground="{StaticResource DollTextBrush}"
+                                                  HorizontalAlignment="Center"
+                                                  VerticalAlignment="Center" />
+                                <StackPanel VerticalAlignment="Center" Margin="12">
+                                    <TextBlock Text="{Binding Profile.NameText}"
+                                               FontSize="20"
+                                               FontWeight="SemiBold"
+                                               TextAlignment="Center"
+                                               TextTrimming="CharacterEllipsis"
+                                               Foreground="{StaticResource DollTextBrush}" />
+                                    <TextBlock Text="{Binding Character.Summary}"
+                                               Margin="0,4,0,0"
+                                               FontSize="13"
+                                               TextAlignment="Center"
+                                               Foreground="{StaticResource DollSecondaryTextBrush}" />
+                                    <Border Theme="{StaticResource BadgeBorderStyle}"
+                                            Margin="0,8,0,0"
+                                            HorizontalAlignment="Center"
+                                            IsVisible="{Binding Character.Hardcore}">
+                                        <TextBlock Text="Hardcore" FontSize="11" Foreground="{DynamicResource WarningForegroundBrush}" />
+                                    </Border>
+                                    <TextBlock Text="{Binding WeaponSetText}"
+                                               Margin="0,16,0,0"
+                                               FontSize="12"
+                                               TextAlignment="Center"
+                                               Foreground="#D9B45A" />
+                                    <!-- Puts every slot back as the save file has it (shown while a slot changed). -->
+                                    <Button Margin="0,10,0,0"
+                                            HorizontalAlignment="Center"
+                                            Width="NaN"
+                                            Theme="{StaticResource SubtleIconButtonStyle}"
+                                            ToolTip.Tip="Undo all changes to the equipment (equipped, changed and removed items)"
+                                            AutomationProperties.Name="Undo equipment changes"
+                                            Command="{Binding ResetEquipmentCommand}"
+                                            IsVisible="{Binding HasChanges}">
+                                        <StackPanel Orientation="Horizontal" Margin="4,0">
+                                            <mi:MaterialIcon Kind="Undo" Width="16" Height="16" Foreground="#D9B45A" />
+                                            <TextBlock Text="Undo equipment changes" Margin="6,0,0,0" FontSize="11" VerticalAlignment="Center" Foreground="#D9B45A" />
+                                        </StackPanel>
+                                    </Button>
+                                    <TextBlock Text="Reading item names and icons…"
+                                               Margin="0,6,0,0"
+                                               FontSize="11"
+                                               TextAlignment="Center"
+                                               Foreground="{StaticResource DollSecondaryTextBrush}"
+                                               IsVisible="{Binding IsLoading}" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center">
+                            <ContentControl Classes="slot" Theme="{StaticResource SlotStyle}" Content="{Binding Ring1}" Width="44" Height="44" />
+                            <ContentControl Classes="slot" Theme="{StaticResource SlotStyle}" Content="{Binding Waist}" Width="120" Height="44" Margin="8,0" />
+                            <ContentControl Classes="slot" Theme="{StaticResource SlotStyle}" Content="{Binding Ring2}" Width="44" Height="44" />
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Right column: off hand, shoulders, hands, feet -->
+                    <StackPanel Grid.Column="4">
+                        <ContentControl Classes="slot" Theme="{StaticResource SlotStyle}" Content="{Binding OffHand}" Width="84" Height="150" />
+                        <ContentControl Classes="slot" Theme="{StaticResource SlotStyle}" Content="{Binding Shoulders}" Width="84" Height="84" Margin="0,8,0,0" />
+                        <ContentControl Classes="slot" Theme="{StaticResource SlotStyle}" Content="{Binding Hands}" Width="84" Height="84" Margin="0,8,0,0" />
+                        <ContentControl Classes="slot" Theme="{StaticResource SlotStyle}" Content="{Binding Feet}" Width="84" Height="84" Margin="0,8,0,0" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- ===== Character: name, sex, difficulty, tributes, attributes and points ===== -->
+            <local:CharacterProfileView Margin="0,0,0,16" VerticalAlignment="Top" DataContext="{Binding Profile}" />
+        </WrapPanel>
+
+        <!-- What the last change could not do (an item that does not fit the slot). -->
+        <TextBlock Margin="0,0,0,12"
+                   MaxWidth="700"
+                   HorizontalAlignment="Left"
+                   FontSize="11"
+                   TextWrapping="Wrap"
+                   Text="{Binding StatusMessage}"
+                   Foreground="{DynamicResource WarningForegroundBrush}"
+                   IsVisible="{Binding HasStatusMessage}" />
+
+        <!-- Why the equipment cannot be changed. -->
+        <TextBlock Margin="0,0,0,12"
+                   MaxWidth="700"
+                   HorizontalAlignment="Left"
+                   FontSize="11"
+                   TextWrapping="Wrap"
+                   Text="{Binding EditHint}"
+                   Foreground="{DynamicResource WarningForegroundBrush}"
+                   IsVisible="{Binding HasEditHint}" />
+    </StackPanel>
+</UserControl>

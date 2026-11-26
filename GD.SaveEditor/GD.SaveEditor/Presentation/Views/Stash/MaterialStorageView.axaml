@@ -1,0 +1,227 @@
+<UserControl x:Class="GD.SaveEditor.Presentation.Views.Stash.MaterialStorageView"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:stashVm="using:GD.SaveEditor.Presentation.ViewModels.Stash"
+             xmlns:charactersVm="using:GD.SaveEditor.Presentation.ViewModels.Characters"
+             xmlns:behaviors="using:GD.SaveEditor.Presentation.Behaviors"
+             xmlns:converters="using:GD.SaveEditor.Presentation.Converters"
+             xmlns:mi="using:Material.Icons.Avalonia"
+             mc:Ignorable="d"
+             x:DataType="stashVm:MaterialStorageViewModel"
+             d:DesignHeight="700" d:DesignWidth="520">
+
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceInclude Source="avares://GD.SaveEditor/Presentation/Views/Inventory/BagResources.axaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- Amount field under a material: black box with the number right-aligned, gold once changed. -->
+            <ControlTheme x:Key="AmountTextBoxStyle" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+                <Setter Property="Height" Value="20" />
+                <Setter Property="MinHeight" Value="0" />
+                <Setter Property="Padding" Value="3,0" />
+                <Setter Property="CornerRadius" Value="2" />
+                <Setter Property="FontSize" Value="11" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="TextAlignment" Value="Right" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="Background" Value="#050505" />
+                <Setter Property="Foreground" Value="{StaticResource DollTextBrush}" />
+                <Setter Property="CaretBrush" Value="{StaticResource DollTextBrush}" />
+                <Setter Property="SelectionBrush" Value="{StaticResource BagGoldBrush}" />
+                <Setter Property="BorderBrush" Value="{StaticResource BagFrameBrush}" />
+                <Style Selector="^:pointerover /template/ Border#Bd">
+                    <Setter Property="BorderBrush" Value="{StaticResource BagFrameBrush}" />
+                </Style>
+                <Style Selector="^:focus /template/ Border#Bd">
+                    <Setter Property="BorderBrush" Value="{StaticResource BagGoldBrush}" />
+                </Style>
+                <Style Selector="^.changed">
+                    <Setter Property="Foreground" Value="{StaticResource BagGoldBrush}" />
+                </Style>
+                <Style Selector="^.readOnly">
+                    <Setter Property="Foreground" Value="{StaticResource DollSecondaryTextBrush}" />
+                    <Setter Property="Cursor" Value="Arrow" />
+                </Style>
+            </ControlTheme>
+
+            <!--
+                One material like on the Smuggler's pages: its icon with the game's tooltip, the amount under it. A
+                material with nothing stored is drawn faded, as the game does.
+            -->
+            <DataTemplate x:Key="MaterialTemplate" DataType="stashVm:MaterialViewModel">
+                <Border Classes="tile"
+                        Classes.empty="{Binding OriginalAmount, Converter={x:Static converters:AppConverters.IsZero}}"
+                        Classes.changed="{Binding IsChanged}"
+                        Width="60"
+                        Margin="2"
+                        Padding="3"
+                        CornerRadius="3"
+                        BorderThickness="1"
+                        BorderBrush="{StaticResource SlotBorderBrush}"
+                        Background="{StaticResource SlotBackgroundBrush}"
+                        IsVisible="{Binding IsVisible}">
+                    <StackPanel>
+                        <Panel Name="IconHost"
+                               Height="40"
+                               Background="Transparent"
+                               DataContext="{Binding Item}"
+                               x:DataType="charactersVm:EquipmentSlotViewModel"
+                               ToolTip.ShowDelay="150">
+                            <ToolTip.Tip>
+                                <ToolTip Theme="{StaticResource ItemToolTipTheme}"
+                                         Content="{Binding}"
+                                         BorderBrush="{Binding Rarity, Converter={StaticResource RarityBrush}}" />
+                            </ToolTip.Tip>
+                            <Image Source="{Binding Icon}"
+                                   Stretch="Uniform"
+                                   StretchDirection="DownOnly"
+                                   RenderOptions.BitmapInterpolationMode="HighQuality"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding Name}"
+                                       IsVisible="{Binding !HasIcon}"
+                                       FontSize="8"
+                                       TextAlignment="Center"
+                                       TextWrapping="Wrap"
+                                       TextTrimming="CharacterEllipsis"
+                                       VerticalAlignment="Center"
+                                       Foreground="{StaticResource DollSecondaryTextBrush}" />
+                        </Panel>
+                        <TextBox Margin="0,3,0,0"
+                                 Theme="{StaticResource AmountTextBoxStyle}"
+                                 Classes.changed="{Binding IsChanged}"
+                                 Classes.error="{Binding HasError}"
+                                 Classes.readOnly="{Binding IsReadOnly}"
+                                 ToolTip.Tip="{Binding ToolTipText}"
+                                 Text="{Binding AmountText}"
+                                 IsReadOnly="{Binding IsReadOnly, Mode=OneWay}"
+                                 AutomationProperties.Name="{Binding Item.Name}"
+                                 behaviors:NumericInput.IsEnabled="True"
+                                 behaviors:NumericInput.Maximum="999999" />
+                    </StackPanel>
+                </Border>
+            </DataTemplate>
+
+            <ItemsPanelTemplate x:Key="MaterialPanel">
+                <WrapPanel Orientation="Horizontal" />
+            </ItemsPanelTemplate>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <UserControl.Styles>
+        <Style Selector="Border.tile.empty Panel#IconHost">
+            <Setter Property="Opacity" Value="0.45" />
+        </Style>
+        <Style Selector="Border.tile.changed">
+            <Setter Property="BorderBrush" Value="{StaticResource BagGoldBrush}" />
+        </Style>
+        <Style Selector="Border.tile.changed Panel#IconHost">
+            <Setter Property="Opacity" Value="1" />
+        </Style>
+    </UserControl.Styles>
+
+    <!-- The Smuggler's material storage: its Components and Crafting materials pages, an amount per material. -->
+    <Border Width="440"
+            Margin="0,0,16,16"
+            Padding="14"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            CornerRadius="6"
+            BorderThickness="1"
+            BorderBrush="{DynamicResource ControlBorderBrush}"
+            Background="{StaticResource DollBackgroundBrush}">
+        <DockPanel>
+            <Border DockPanel.Dock="Top"
+                    Height="38"
+                    Margin="0,0,0,6"
+                    Padding="8,0,4,0"
+                    CornerRadius="3"
+                    Background="{StaticResource BagHeaderBrush}">
+                <DockPanel LastChildFill="False" VerticalAlignment="Center">
+                    <TextBlock DockPanel.Dock="Left"
+                               Text="{Binding Title}"
+                               FontSize="14"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"
+                               Foreground="{StaticResource DollTextBrush}" />
+
+                    <!-- Puts every amount of the file back (shown while something changed). -->
+                    <Button DockPanel.Dock="Left"
+                            Margin="8,0,0,0"
+                            Theme="{StaticResource SubtleIconButtonStyle}"
+                            ToolTip.Tip="Undo all changes to the material storage"
+                            AutomationProperties.Name="Undo material changes"
+                            Command="{Binding ResetCommand}"
+                            IsVisible="{Binding HasChanges}">
+                        <mi:MaterialIcon Kind="Undo" Width="16" Height="16" Foreground="{StaticResource BagGoldBrush}" />
+                    </Button>
+
+                    <!-- Search like the Smuggler's: by name (or record path). -->
+                    <Panel DockPanel.Dock="Right" Width="150" VerticalAlignment="Center">
+                        <TextBox Text="{Binding FilterText}"
+                                 Padding="22,0,4,0"
+                                 AutomationProperties.Name="Search materials"
+                                 ToolTip.Tip="Show only materials whose name contains this text" />
+                        <mi:MaterialIcon Kind="Magnify"
+                                         Width="14" Height="14"
+                                         Margin="6,0,0,0"
+                                         HorizontalAlignment="Left"
+                                         IsHitTestVisible="False"
+                                         Foreground="{StaticResource DollSecondaryTextBrush}" />
+                    </Panel>
+                </DockPanel>
+            </Border>
+
+            <StackPanel DockPanel.Dock="Bottom">
+                <TextBlock Margin="0,8,0,0"
+                           FontSize="11"
+                           TextWrapping="Wrap"
+                           Text="{Binding Notice}"
+                           Foreground="{StaticResource DollSecondaryTextBrush}" />
+                <TextBlock Margin="0,6,0,0"
+                           FontSize="11"
+                           TextWrapping="Wrap"
+                           Text="Only the stored materials are listed, without icons: generate the game database (database button in the title bar) to see and add every component and crafting material."
+                           Foreground="{DynamicResource WarningForegroundBrush}"
+                           IsVisible="{Binding IsDatabaseMissing}" />
+                <TextBlock Margin="0,6,0,0"
+                           FontSize="11"
+                           TextWrapping="Wrap"
+                           Text="Some amounts are not valid (marked red): enter whole numbers from 0 to 999,999."
+                           Foreground="{DynamicResource ErrorForegroundBrush}"
+                           IsVisible="{Binding HasErrors}" />
+                <TextBlock Margin="0,6,0,0"
+                           FontSize="11"
+                           Text="Reading material names and icons…"
+                           Foreground="{StaticResource DollSecondaryTextBrush}"
+                           IsVisible="{Binding IsLoading}" />
+            </StackPanel>
+
+            <!-- The two pages of the Smuggler's window. -->
+            <TabControl Theme="{StaticResource UnderlineTabControlStyle}" IsVisible="{Binding CanEdit}">
+                <TabItem Header="Components">
+                    <ScrollViewer MaxHeight="560" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl Margin="0,6,0,0"
+                                      Focusable="False"
+                                      ItemsSource="{Binding Components}"
+                                      ItemsPanel="{StaticResource MaterialPanel}"
+                                      ItemTemplate="{StaticResource MaterialTemplate}" />
+                    </ScrollViewer>
+                </TabItem>
+                <TabItem Header="Crafting materials">
+                    <ScrollViewer MaxHeight="560" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl Margin="0,6,0,0"
+                                      Focusable="False"
+                                      ItemsSource="{Binding CraftingMaterials}"
+                                      ItemsPanel="{StaticResource MaterialPanel}"
+                                      ItemTemplate="{StaticResource MaterialTemplate}" />
+                    </ScrollViewer>
+                </TabItem>
+            </TabControl>
+        </DockPanel>
+    </Border>
+</UserControl>

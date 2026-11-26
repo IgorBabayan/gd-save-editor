@@ -1,21 +1,23 @@
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Threading;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.LogicalTree;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using GD.SaveEditor.Presentation.ViewModels.Inventory;
 
 namespace GD.SaveEditor.Presentation.Views.Inventory;
 
 /// <summary>
-/// Shows an <see cref="ItemInspectorView"/> next to the bag item that was clicked, as a flyout on the
-/// window's adorner layer. Living inside the window (not in a Popup) keeps it under the window's own dialogs,
-/// such as the "Remove item" question, and lets it follow the window's theme.
+/// Shows an <see cref="ItemInspectorView"/> next to the bag item that was clicked, as a flyout on the window's adorner
+/// layer. Living inside the window (not in a popup) keeps it under the window's own dialogs, such as the "Remove item"
+/// question, and lets it follow the window's theme.
 /// It closes on Apply / Cancel, Esc, a click outside it, or when the item leaves the screen; only Apply changes the bag.
 /// One inspector is open at a time.
 /// </summary>
-internal sealed class ItemInspectorAdorner : Adorner
+internal sealed class ItemInspectorAdorner : Control
 {
     /// <summary>Space between the item and the inspector.</summary>
     private const double Gap = 8;
@@ -25,9 +27,9 @@ internal sealed class ItemInspectorAdorner : Adorner
 
     private static ItemInspectorAdorner? _current;
 
-    private readonly AdornerLayer _layer;
+    private readonly Control _root;
     private readonly Window _window;
-    private readonly FrameworkElement _anchor;
+    private readonly Control _anchor;
     private readonly ItemBuilderViewModel _viewModel;
     private readonly ItemInspectorView _view;
     private readonly Action<BuiltItem> _applied;
@@ -36,23 +38,22 @@ internal sealed class ItemInspectorAdorner : Adorner
     private bool _isClosed;
 
     private ItemInspectorAdorner(
-        UIElement root,
-        AdornerLayer layer,
+        Control root,
         Window window,
-        FrameworkElement anchor,
+        Control anchor,
         ItemBuilderViewModel viewModel,
         Action<BuiltItem> applied,
         Action<ItemBuilderViewModel> openFullBuilder)
-        : base(root)
     {
-        _layer = layer;
+        _root = root;
         _window = window;
         _anchor = anchor;
         _viewModel = viewModel;
         _applied = applied;
         _openFullBuilder = openFullBuilder;
         _view = new ItemInspectorView(viewModel);
-        AddVisualChild(_view);
+        LogicalChildren.Add(_view);
+        VisualChildren.Add(_view);
     }
 
     /// <summary>
@@ -62,19 +63,19 @@ internal sealed class ItemInspectorAdorner : Adorner
     /// <param name="openFullBuilder">Shows the full item builder window (modal) over the same view model.</param>
     /// <returns><c>false</c> when the anchor is not in a window with an adorner layer (nothing was opened).</returns>
     public static bool TryShow(
-        FrameworkElement anchor,
+        Control anchor,
         ItemBuilderViewModel viewModel,
         Action<BuiltItem> applied,
         Action<ItemBuilderViewModel> openFullBuilder)
     {
         _current?.Close();
 
-        if (Window.GetWindow(anchor) is not { Content: UIElement root } window
-            || !root.IsAncestorOf(anchor)
-            || AdornerLayer.GetAdornerLayer(root) is not { } layer)
+        if (TopLevel.GetTopLevel(anchor) is not Window { Content: Control root } window
+            || !root.IsVisualAncestorOf(anchor)
+            || AdornerLayer.GetAdornerLayer(root) is null)
             return false;
 
-        _current = new ItemInspectorAdorner(root, layer, window, anchor, viewModel, applied, openFullBuilder);
+        _current = new ItemInspectorAdorner(root, window, anchor, viewModel, applied, openFullBuilder);
         _current.Open();
         return true;
     }
@@ -88,12 +89,12 @@ internal sealed class ItemInspectorAdorner : Adorner
     {
         _viewModel.CloseRequested += OnCloseRequested;
         _view.ExpandRequested += OnExpandRequested;
-        _window.PreviewMouseDown += OnWindowPreviewMouseDown;
-        _window.PreviewKeyDown += OnWindowPreviewKeyDown;
-        _window.Closed += OnWindowClosed;
+        _window.AddHandler(PointerPressedEvent, OnWindowPointerPressed, RoutingStrategies.Tunnel);
+        _window.AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Tunnel);
         // A scrolled character page moves the item; follow it.
-        _window.AddHandler(ScrollViewer.ScrollChangedEvent, new ScrollChangedEventHandler(OnScrollChanged), true);
-        _anchor.Unloaded += OnAnchorUnloaded;
+        _window.AddHandler(ScrollViewer.ScrollChangedEvent, OnScrollChanged, RoutingStrategies.Bubble, handledEventsToo: true);
+        _window.Closed += OnWindowClosed;
+        _anchor.DetachedFromVisualTree += OnAnchorDetached;
 
         AddToLayer();
     }
@@ -106,11 +107,11 @@ internal sealed class ItemInspectorAdorner : Adorner
 
         _viewModel.CloseRequested -= OnCloseRequested;
         _view.ExpandRequested -= OnExpandRequested;
-        _window.PreviewMouseDown -= OnWindowPreviewMouseDown;
-        _window.PreviewKeyDown -= OnWindowPreviewKeyDown;
+        _window.RemoveHandler(PointerPressedEvent, OnWindowPointerPressed);
+        _window.RemoveHandler(KeyDownEvent, OnWindowKeyDown);
+        _window.RemoveHandler(ScrollViewer.ScrollChangedEvent, OnScrollChanged);
         _window.Closed -= OnWindowClosed;
-        _window.RemoveHandler(ScrollViewer.ScrollChangedEvent, new ScrollChangedEventHandler(OnScrollChanged));
-        _anchor.Unloaded -= OnAnchorUnloaded;
+        _anchor.DetachedFromVisualTree -= OnAnchorDetached;
 
         var hadFocus = _view.IsKeyboardFocusWithin;
         RemoveFromLayer();
@@ -118,7 +119,7 @@ internal sealed class ItemInspectorAdorner : Adorner
             _current = null;
 
         // Hand the keyboard back to the item so the keyboard keeps working from where the user was.
-        if (hadFocus && _anchor.IsLoaded)
+        if (hadFocus && _anchor.IsAttachedToVisualTree())
             _anchor.Focus();
     }
 
@@ -126,9 +127,10 @@ internal sealed class ItemInspectorAdorner : Adorner
     {
         if (_isOnLayer)
             return;
-        _layer.Add(this);
+
+        AdornerLayer.SetAdorner(_root, this);
         _isOnLayer = true;
-        Dispatcher.InvokeAsync(() =>
+        Dispatcher.UIThread.Post(() =>
         {
             if (!_isClosed)
                 _view.FocusFirst();
@@ -139,7 +141,9 @@ internal sealed class ItemInspectorAdorner : Adorner
     {
         if (!_isOnLayer)
             return;
-        _layer.Remove(this);
+
+        if (ReferenceEquals(AdornerLayer.GetAdorner(_root), this))
+            AdornerLayer.SetAdorner(_root, null);
         _isOnLayer = false;
     }
 
@@ -165,21 +169,22 @@ internal sealed class ItemInspectorAdorner : Adorner
             AddToLayer();
     }
 
-    private void OnWindowPreviewMouseDown(object sender, MouseButtonEventArgs e)
+    private void OnWindowPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (IsWithin(_view, e.OriginalSource))
+        var source = e.Source as Visual;
+        if (IsWithin(_view, source) || !_isOnLayer)
             return;
 
         // A click outside cancels; a click on the same item only closes it (instead of reopening it).
-        var onAnchor = IsWithin(_anchor, e.OriginalSource);
+        var onAnchor = IsWithin(_anchor, source);
         Close();
         if (onAnchor)
             e.Handled = true;
     }
 
-    private void OnWindowPreviewKeyDown(object sender, KeyEventArgs e)
+    private void OnWindowKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Escape)
+        if (e.Key != Key.Escape || !_isOnLayer)
             return;
 
         // Esc first closes an open part picker, then the inspector.
@@ -190,43 +195,34 @@ internal sealed class ItemInspectorAdorner : Adorner
         e.Handled = true;
     }
 
-    private void OnScrollChanged(object sender, ScrollChangedEventArgs e)
+    private void OnScrollChanged(object? sender, ScrollChangedEventArgs e)
     {
-        if (!IsWithin(_view, e.OriginalSource))
+        if (!IsWithin(_view, e.Source as Visual))
             InvalidateArrange();
     }
 
-    private void OnAnchorUnloaded(object sender, RoutedEventArgs e) => Close();
+    private void OnAnchorDetached(object? sender, VisualTreeAttachmentEventArgs e) => Close();
 
     private void OnWindowClosed(object? sender, EventArgs e) => Close();
 
-    /// <summary><c>true</c> when <paramref name="source"/> is <paramref name="ancestor"/> or inside it.</summary>
-    private static bool IsWithin(DependencyObject ancestor, object? source)
+    /// <summary><c>true</c> when <paramref name="source"/> is <paramref name="ancestor"/> or inside it (visual or logical tree).</summary>
+    private static bool IsWithin(Visual ancestor, Visual? source)
     {
-        for (var node = source as DependencyObject; node is not null; node = GetParent(node))
-        {
-            if (ReferenceEquals(node, ancestor))
-                return true;
-        }
+        if (source is null)
+            return false;
 
-        return false;
+        if (ReferenceEquals(source, ancestor) || ancestor.IsVisualAncestorOf(source))
+            return true;
+
+        // Popups of the inspector (a tooltip, a drop-down) are only its logical descendants.
+        return ancestor is ILogical logical && source is ILogical node && logical.IsLogicalAncestorOf(node);
     }
 
-    private static DependencyObject? GetParent(DependencyObject node) =>
-        node is Visual or System.Windows.Media.Media3D.Visual3D
-            ? VisualTreeHelper.GetParent(node) ?? LogicalTreeHelper.GetParent(node)
-            : LogicalTreeHelper.GetParent(node);
+    // ===== Layout =====
 
-    // ===== Visual child and layout =====
-
-    protected override int VisualChildrenCount => 1;
-
-    protected override Visual GetVisualChild(int index) =>
-        index == 0 ? _view : throw new ArgumentOutOfRangeException(nameof(index));
-
-    protected override Size MeasureOverride(Size constraint)
+    protected override Size MeasureOverride(Size availableSize)
     {
-        var area = AdornedElement.RenderSize;
+        var area = _root.Bounds.Size;
         // Never taller than the window: the inspector scrolls its properties instead.
         var maxHeight = Math.Max(160, area.Height - 2 * EdgeMargin);
         if (!_view.MaxHeight.Equals(maxHeight))
@@ -239,7 +235,7 @@ internal sealed class ItemInspectorAdorner : Adorner
     protected override Size ArrangeOverride(Size finalSize)
     {
         var size = _view.DesiredSize;
-        var area = AdornedElement.RenderSize;
+        var area = _root.Bounds.Size;
         var anchor = GetAnchorBounds();
 
         // Right of the item when it fits, else left of it, else as far right as possible.
@@ -262,10 +258,10 @@ internal sealed class ItemInspectorAdorner : Adorner
     /// <summary>Bounds of the item in the adorned root's coordinates (the root's middle if it cannot be found).</summary>
     private Rect GetAnchorBounds()
     {
-        if (_anchor.IsLoaded && AdornedElement.IsAncestorOf(_anchor))
-            return _anchor.TransformToAncestor(AdornedElement).TransformBounds(new Rect(_anchor.RenderSize));
+        if (_anchor.IsAttachedToVisualTree() && _anchor.TranslatePoint(default, _root) is { } topLeft)
+            return new Rect(topLeft, _anchor.Bounds.Size);
 
-        var area = AdornedElement.RenderSize;
+        var area = _root.Bounds.Size;
         return new Rect(area.Width / 2, area.Height / 4, 0, 0);
     }
 }

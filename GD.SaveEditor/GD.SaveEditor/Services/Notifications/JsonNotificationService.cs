@@ -3,8 +3,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Windows;
-using System.Windows.Threading;
+using Avalonia.Threading;
 
 namespace GD.SaveEditor.Services.Notifications;
 
@@ -12,8 +11,14 @@ namespace GD.SaveEditor.Services.Notifications;
 /// Notification history persisted as JSON in <c>%APPDATA%\GD.SaveEditor\notifications.json</c>,
 /// so earlier notifications are still there after a restart.
 /// </summary>
-public sealed class JsonNotificationService : INotificationService
+public sealed class JsonNotificationService : INotificationService, IDisposable
 {
+    /// <summary>Changes within this time are written to disk once.</summary>
+    private static readonly TimeSpan PersistDelay = TimeSpan.FromMilliseconds(400);
+
+    private readonly object _writeLock = new();
+    private DispatcherTimer? _persistTimer;
+
     /// <summary>Oldest notifications are dropped beyond this count.</summary>
     private const int MaxNotifications = 200;
 
@@ -33,7 +38,7 @@ public sealed class JsonNotificationService : INotificationService
 
     public JsonNotificationService()
     {
-        _dispatcher = Application.Current?.Dispatcher ?? Dispatcher.CurrentDispatcher;
+        _dispatcher = Dispatcher.UIThread;
         Notifications = new ReadOnlyObservableCollection<Notification>(_notifications);
 
         foreach (var notification in Load().OrderByDescending(n => n.CreatedAt).Take(MaxNotifications))
@@ -52,7 +57,7 @@ public sealed class JsonNotificationService : INotificationService
 
         if (!_dispatcher.CheckAccess())
         {
-            _dispatcher.InvokeAsync(() => Notify(title, message, severity));
+            _dispatcher.Post(() => Notify(title, message, severity));
             return;
         }
 
@@ -159,7 +164,7 @@ public sealed class JsonNotificationService : INotificationService
 
     private void Changed()
     {
-        Persist();
+        SchedulePersist();
         UnreadCountChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -167,22 +172,63 @@ public sealed class JsonNotificationService : INotificationService
 
     #region Persistence
 
-    private void Persist()
+    /// <summary>
+    /// Writes the history shortly after the last change, off the UI thread: a burst of changes (marking all as read,
+    /// a reload reporting several problems) costs one write instead of one per change.
+    /// </summary>
+    private void SchedulePersist()
     {
-        try
+        if (_persistTimer is null)
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(_filePath)!);
+            _persistTimer = new DispatcherTimer(PersistDelay, DispatcherPriority.Background, (_, _) => PersistNow(background: true));
+            _persistTimer.Start();
+            return;
+        }
 
-            // Write to a temp file first so a crash mid-write never leaves a corrupted file.
-            var tempPath = _filePath + ".tmp";
-            File.WriteAllText(tempPath, JsonSerializer.Serialize(_notifications, SerializerOptions));
-            File.Move(tempPath, _filePath, overwrite: true);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        // Restart the delay.
+        _persistTimer.Stop();
+        _persistTimer.Start();
+    }
+
+    /// <summary>Serializes on the calling (UI) thread, so the list does not change under it, and writes in the background.</summary>
+    private void PersistNow(bool background)
+    {
+        _persistTimer?.Stop();
+        _persistTimer = null;
+
+        var json = JsonSerializer.Serialize(_notifications, SerializerOptions);
+        if (background)
+            _ = Task.Run(() => Write(json));
+        else
+            Write(json);
+    }
+
+    private void Write(string json)
+    {
+        lock (_writeLock)
         {
-            // Losing the history is not worth crashing over; the in-memory list stays intact.
-            System.Diagnostics.Debug.WriteLine($"Saving notifications failed: {ex.Message}");
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(_filePath)!);
+
+                // Write to a temp file first so a crash mid-write never leaves a corrupted file.
+                var tempPath = _filePath + ".tmp";
+                File.WriteAllText(tempPath, json);
+                File.Move(tempPath, _filePath, overwrite: true);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Losing the history is not worth crashing over; the in-memory list stays intact.
+                System.Diagnostics.Debug.WriteLine($"Saving notifications failed: {ex.Message}");
+            }
         }
+    }
+
+    /// <summary>A change still waiting for its delayed write is written before the editor exits.</summary>
+    public void Dispose()
+    {
+        if (_persistTimer is not null)
+            PersistNow(background: false);
     }
 
     private List<Notification> Load()

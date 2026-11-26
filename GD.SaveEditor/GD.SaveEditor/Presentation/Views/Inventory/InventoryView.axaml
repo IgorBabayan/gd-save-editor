@@ -1,0 +1,277 @@
+<local:ItemGridView x:Class="GD.SaveEditor.Presentation.Views.Inventory.InventoryView"
+                    xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                    xmlns:inventoryVm="using:GD.SaveEditor.Presentation.ViewModels.Inventory"
+                    xmlns:mi="using:Material.Icons.Avalonia"
+                    xmlns:local="using:GD.SaveEditor.Presentation.Views.Inventory"
+                    mc:Ignorable="d"
+                    x:DataType="inventoryVm:InventoryViewModel"
+                    d:DesignHeight="400" d:DesignWidth="900">
+
+    <local:ItemGridView.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceInclude Source="avares://GD.SaveEditor/Presentation/Views/Inventory/BagResources.axaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!--
+                Tab buttons of the bags beside the main bag: a bag icon with its number, gold when shown. Holding a
+                dragged item over a tab shows that bag; dropping it there puts it in the first free cell (ItemGridView
+                finds the tab by its bagTab class).
+            -->
+            <ControlTheme x:Key="BagTabItemStyle" TargetType="ListBoxItem" x:DataType="inventoryVm:InventoryBagViewModel">
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="ToolTip.Tip" Value="{Binding Summary}" />
+                <Setter Property="Template">
+                    <ControlTemplate>
+                        <Border Name="Bd"
+                                Classes="bagTab"
+                                Width="34" Height="30"
+                                Margin="3,0,0,0"
+                                CornerRadius="3"
+                                BorderThickness="1"
+                                BorderBrush="{StaticResource SlotBorderBrush}"
+                                Background="{StaticResource SlotBackgroundBrush}">
+                            <Panel>
+                                <mi:MaterialIcon Name="BagIcon"
+                                                 Kind="BagPersonalOutline"
+                                                 Width="18" Height="18"
+                                                 IsVisible="{Binding IsEmpty}"
+                                                 Foreground="{StaticResource DollSecondaryTextBrush}" />
+                                <mi:MaterialIcon Name="FullBagIcon"
+                                                 Kind="BagPersonal"
+                                                 Width="18" Height="18"
+                                                 IsVisible="{Binding !IsEmpty}"
+                                                 Foreground="{StaticResource DollSecondaryTextBrush}" />
+                                <TextBlock Text="{Binding Number}"
+                                           Margin="0,0,3,1"
+                                           FontSize="9"
+                                           FontWeight="SemiBold"
+                                           HorizontalAlignment="Right"
+                                           VerticalAlignment="Bottom"
+                                           Foreground="{StaticResource DollTextBrush}" />
+                            </Panel>
+                        </Border>
+                    </ControlTemplate>
+                </Setter>
+                <Style Selector="^:pointerover /template/ Border#Bd">
+                    <Setter Property="BorderBrush" Value="{StaticResource BagFrameBrush}" />
+                </Style>
+                <Style Selector="^:selected /template/ Border#Bd">
+                    <Setter Property="BorderBrush" Value="{StaticResource BagGoldBrush}" />
+                </Style>
+                <Style Selector="^:selected /template/ mi|MaterialIcon">
+                    <Setter Property="Foreground" Value="{StaticResource BagGoldBrush}" />
+                </Style>
+            </ControlTheme>
+
+            <!-- Iron bits field: black box with the amount right-aligned, like the game's. -->
+            <ControlTheme x:Key="MoneyTextBoxStyle" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+                <Setter Property="Width" Value="150" />
+                <Setter Property="Height" Value="26" />
+                <Setter Property="MinHeight" Value="0" />
+                <Setter Property="Padding" Value="6,0" />
+                <Setter Property="CornerRadius" Value="2" />
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="TextAlignment" Value="Right" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="Background" Value="#050505" />
+                <Setter Property="Foreground" Value="{StaticResource DollTextBrush}" />
+                <Setter Property="CaretBrush" Value="{StaticResource DollTextBrush}" />
+                <Setter Property="SelectionBrush" Value="{StaticResource BagGoldBrush}" />
+                <Setter Property="BorderBrush" Value="{StaticResource BagFrameBrush}" />
+                <Style Selector="^:pointerover /template/ Border#Bd">
+                    <Setter Property="BorderBrush" Value="{StaticResource BagFrameBrush}" />
+                </Style>
+                <Style Selector="^:focus /template/ Border#Bd">
+                    <Setter Property="BorderBrush" Value="{StaticResource BagGoldBrush}" />
+                </Style>
+                <Style Selector="^.changed">
+                    <Setter Property="Foreground" Value="{StaticResource BagGoldBrush}" />
+                </Style>
+                <Style Selector="^.readOnly">
+                    <Setter Property="Foreground" Value="{StaticResource DollSecondaryTextBrush}" />
+                    <Setter Property="Cursor" Value="Arrow" />
+                </Style>
+            </ControlTheme>
+        </ResourceDictionary>
+    </local:ItemGridView.Resources>
+
+    <local:ItemGridView.Styles>
+        <StyleInclude Source="avares://GD.SaveEditor/Presentation/Views/Inventory/BagStyles.axaml" />
+    </local:ItemGridView.Styles>
+
+    <!--
+        The bags under the equipment, like the game's inventory screen. The card stretches to the width of the
+        equipment and attributes row above it (CharacterView), with the bags centered in it.
+    -->
+    <Border Margin="0,0,0,16"
+            Padding="14"
+            HorizontalAlignment="Stretch"
+            CornerRadius="6"
+            BorderThickness="1"
+            BorderBrush="{DynamicResource ControlBorderBrush}"
+            Background="{StaticResource DollBackgroundBrush}">
+        <StackPanel>
+            <!-- The bags could not be read (the reason is shown above the equipment). -->
+            <TextBlock Margin="0,0,0,10"
+                       TextWrapping="Wrap"
+                       Foreground="{DynamicResource WarningForegroundBrush}"
+                       Text="The bags could not be read from the save file."
+                       IsVisible="{Binding !HasInventory}" />
+
+            <WrapPanel Orientation="Horizontal" HorizontalAlignment="Center">
+
+                <!-- ===== Main bag with the iron bits above it ===== -->
+                <StackPanel Margin="0,0,16,0">
+                    <Border Height="38"
+                            Margin="0,0,0,6"
+                            Padding="8,0,6,0"
+                            CornerRadius="3"
+                            Background="{StaticResource BagHeaderBrush}">
+                        <DockPanel LastChildFill="False" VerticalAlignment="Center">
+                            <TextBlock DockPanel.Dock="Left"
+                                       Text="Inventory"
+                                       FontSize="14"
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center"
+                                       Foreground="{StaticResource DollTextBrush}" />
+
+                            <!-- Makes a new item in the item builder and puts it at the first free cell. -->
+                            <Button DockPanel.Dock="Left"
+                                    Margin="8,0,0,0"
+                                    Theme="{StaticResource SubtleIconButtonStyle}"
+                                    ToolTip.Tip="Add an item (right-click a cell to put it there)"
+                                    AutomationProperties.Name="Add item"
+                                    Command="{Binding NewItemCommand}"
+                                    CommandParameter="{Binding $self}"
+                                    IsVisible="{Binding CanEditItems}">
+                                <mi:MaterialIcon Kind="PlusBoxOutline" Width="18" Height="18" Foreground="{StaticResource BagGoldBrush}" />
+                            </Button>
+
+                            <!-- Puts the bags back as the save file has them (shown while something in them changed). -->
+                            <Button DockPanel.Dock="Left"
+                                    Margin="4,0,0,0"
+                                    Theme="{StaticResource SubtleIconButtonStyle}"
+                                    ToolTip.Tip="Undo all changes to the bags (moved, added, changed and removed items)"
+                                    AutomationProperties.Name="Undo bag changes"
+                                    Command="{Binding ResetItemsCommand}"
+                                    IsVisible="{Binding AreItemsChanged}">
+                                <mi:MaterialIcon Kind="Undo" Width="16" Height="16" Foreground="{StaticResource BagGoldBrush}" />
+                            </Button>
+
+                            <StackPanel DockPanel.Dock="Right"
+                                        Orientation="Horizontal"
+                                        VerticalAlignment="Center"
+                                        IsVisible="{Binding HasMoney}">
+                                <!-- Puts the amount of the save file back (shown while it is changed). -->
+                                <Button Margin="0,0,6,0"
+                                        Theme="{StaticResource SubtleIconButtonStyle}"
+                                        ToolTip.Tip="Undo the change (Esc)"
+                                        Command="{Binding ResetMoneyCommand}"
+                                        IsVisible="{Binding IsMoneyChanged}">
+                                    <mi:MaterialIcon Kind="Undo" Width="16" Height="16" Foreground="{StaticResource BagGoldBrush}" />
+                                </Button>
+                                <TextBox x:Name="MoneyBox"
+                                         Theme="{StaticResource MoneyTextBoxStyle}"
+                                         Classes.changed="{Binding IsMoneyChanged}"
+                                         Classes.error="{Binding HasMoneyError}"
+                                         Classes.readOnly="{Binding IsMoneyReadOnly}"
+                                         AutomationProperties.Name="Iron bits"
+                                         Text="{Binding MoneyText}"
+                                         IsReadOnly="{Binding IsMoneyReadOnly, Mode=OneWay}"
+                                         ToolTip.Tip="{Binding MoneyToolTip}"
+                                         LostFocus="OnMoneyLostFocus"
+                                         KeyDown="OnMoneyKeyDown" />
+                                <mi:MaterialIcon Kind="CashMultiple"
+                                                 Width="20" Height="20"
+                                                 Margin="6,0,0,0"
+                                                 ToolTip.Tip="Iron bits"
+                                                 Foreground="#C8CCD2" />
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+
+                    <TextBlock Margin="0,0,0,6"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               HorizontalAlignment="Right"
+                               Text="{Binding MoneyError}"
+                               Foreground="{DynamicResource ErrorForegroundBrush}"
+                               IsVisible="{Binding HasMoneyError}" />
+
+                    <ContentControl Focusable="False"
+                                    Content="{Binding MainBag}"
+                                    ContentTemplate="{StaticResource BagGridTemplate}" />
+                </StackPanel>
+
+                <!-- ===== Other bags: tab buttons, then the selected bag ===== -->
+                <StackPanel IsVisible="{Binding HasBags}">
+                    <Border Height="38"
+                            Margin="0,0,0,6"
+                            Padding="8,0,4,0"
+                            CornerRadius="3"
+                            Background="{StaticResource BagHeaderBrush}">
+                        <DockPanel LastChildFill="False" VerticalAlignment="Center">
+                            <TextBlock DockPanel.Dock="Left"
+                                       Margin="0,0,12,0"
+                                       Text="{Binding SelectedBag.Name}"
+                                       FontSize="14"
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center"
+                                       Foreground="{StaticResource DollTextBrush}" />
+                            <ListBox DockPanel.Dock="Right"
+                                     ItemsSource="{Binding Bags}"
+                                     SelectedItem="{Binding SelectedBag, Mode=TwoWay}"
+                                     ItemContainerTheme="{StaticResource BagTabItemStyle}"
+                                     Background="Transparent"
+                                     BorderThickness="0"
+                                     Padding="0"
+                                     VerticalAlignment="Center"
+                                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                     ScrollViewer.VerticalScrollBarVisibility="Disabled"
+                                     AutomationProperties.Name="Bags">
+                                <ListBox.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ListBox.ItemsPanel>
+                            </ListBox>
+                        </DockPanel>
+                    </Border>
+
+                    <ContentControl Focusable="False"
+                                    Content="{Binding SelectedBag}"
+                                    ContentTemplate="{StaticResource BagGridTemplate}" />
+                </StackPanel>
+            </WrapPanel>
+
+            <TextBlock Margin="0,8,0,0"
+                       MaxWidth="700"
+                       HorizontalAlignment="Left"
+                       FontSize="11"
+                       TextWrapping="Wrap"
+                       Text="{Binding StatusMessage}"
+                       Foreground="{DynamicResource WarningForegroundBrush}"
+                       IsVisible="{Binding HasStatusMessage}" />
+
+            <TextBlock Margin="0,8,0,0"
+                       MaxWidth="700"
+                       HorizontalAlignment="Left"
+                       FontSize="11"
+                       TextWrapping="Wrap"
+                       Text="{Binding MoveHint}"
+                       Foreground="{DynamicResource WarningForegroundBrush}"
+                       IsVisible="{Binding HasMoveHint}" />
+
+            <TextBlock Margin="0,8,0,0"
+                       FontSize="11"
+                       Text="Reading item names and icons…"
+                       Foreground="{StaticResource DollSecondaryTextBrush}"
+                       IsVisible="{Binding IsLoading}" />
+        </StackPanel>
+    </Border>
+</local:ItemGridView>

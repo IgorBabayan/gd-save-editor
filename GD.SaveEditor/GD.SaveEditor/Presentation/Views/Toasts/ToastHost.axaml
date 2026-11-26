@@ -1,0 +1,117 @@
+<UserControl x:Class="GD.SaveEditor.Presentation.Views.Toasts.ToastHost"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:toasts="using:GD.SaveEditor.Presentation.Services.Toasts"
+             xmlns:notifications="using:GD.SaveEditor.Services.Notifications"
+             xmlns:mi="using:Material.Icons.Avalonia"
+             mc:Ignorable="d"
+             x:DataType="toasts:ToastService"
+             HorizontalAlignment="Right"
+             VerticalAlignment="Bottom"
+             Margin="16">
+
+    <UserControl.Styles>
+        <!-- Slide + fade in when the toast appears. -->
+        <Style Selector="Panel.toast">
+            <Style.Animations>
+                <Animation Duration="0:0:0.18" Easing="CubicEaseOut" FillMode="Forward">
+                    <KeyFrame Cue="0%">
+                        <Setter Property="Opacity" Value="0" />
+                        <Setter Property="TranslateTransform.Y" Value="12" />
+                    </KeyFrame>
+                    <KeyFrame Cue="100%">
+                        <Setter Property="Opacity" Value="1" />
+                        <Setter Property="TranslateTransform.Y" Value="0" />
+                    </KeyFrame>
+                </Animation>
+            </Style.Animations>
+        </Style>
+        <Style Selector="mi|MaterialIcon.severity.success">
+            <Setter Property="Kind" Value="CheckCircleOutline" />
+            <Setter Property="Foreground" Value="{DynamicResource SuccessForegroundBrush}" />
+        </Style>
+        <Style Selector="mi|MaterialIcon.severity.warning">
+            <Setter Property="Kind" Value="AlertOutline" />
+            <Setter Property="Foreground" Value="{DynamicResource WarningForegroundBrush}" />
+        </Style>
+        <Style Selector="mi|MaterialIcon.severity.error">
+            <Setter Property="Kind" Value="AlertCircleOutline" />
+            <Setter Property="Foreground" Value="{DynamicResource ErrorForegroundBrush}" />
+        </Style>
+    </UserControl.Styles>
+
+    <!--
+        Bottom-right stack of toasts. Placed in every window that may be in front (main window, Settings);
+        only the frontmost host shows them, see ToastHost.axaml.cs.
+    -->
+    <ItemsControl x:Name="ToastList" ItemsSource="{Binding Toasts}" Focusable="False">
+        <ItemsControl.ItemTemplate>
+            <DataTemplate DataType="toasts:Toast">
+                <Panel Classes="toast" Width="340" Margin="0,8,0,0">
+                    <Panel.RenderTransform>
+                        <TranslateTransform />
+                    </Panel.RenderTransform>
+
+                    <Border CornerRadius="8"
+                            BorderThickness="1"
+                            BorderBrush="{DynamicResource ControlBorderBrush}"
+                            Background="{DynamicResource TitleBarBackgroundBrush}"
+                            BoxShadow="0 2 16 0 #59000000"
+                            Padding="14,12,8,12">
+                        <Grid ColumnDefinitions="Auto,*,Auto">
+                            <!-- Severity icon, text, close. -->
+                            <mi:MaterialIcon Classes="severity"
+                                             Classes.success="{Binding Severity, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static notifications:NotificationSeverity.Success}}"
+                                             Classes.warning="{Binding Severity, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static notifications:NotificationSeverity.Warning}}"
+                                             Classes.error="{Binding Severity, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static notifications:NotificationSeverity.Error}}"
+                                             Grid.Column="0"
+                                             Width="20"
+                                             Height="20"
+                                             Margin="0,0,12,0"
+                                             VerticalAlignment="Top"
+                                             Kind="InformationOutline"
+                                             Foreground="{DynamicResource AccentBrush}" />
+
+                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding Message}"
+                                           FontSize="13"
+                                           FontWeight="SemiBold"
+                                           TextWrapping="Wrap"
+                                           Foreground="{DynamicResource WindowForegroundBrush}" />
+                                <TextBlock Margin="0,2,0,0"
+                                           Text="{Binding Details}"
+                                           Theme="{StaticResource SecondaryTextStyle}"
+                                           IsVisible="{Binding HasDetails}" />
+                                <ProgressBar Margin="0,8,0,0"
+                                             Height="4"
+                                             Minimum="0"
+                                             Maximum="100"
+                                             Value="{Binding ProgressPercent, Mode=OneWay}"
+                                             IsVisible="{Binding HasProgress}" />
+                                <Button Margin="-8,6,0,0"
+                                        HorizontalAlignment="Left"
+                                        Theme="{StaticResource TextLinkButtonStyle}"
+                                        Content="{Binding ActionText}"
+                                        Command="{Binding ActionCommand}"
+                                        IsVisible="{Binding HasAction}" />
+                            </StackPanel>
+
+                            <Button Grid.Column="2"
+                                    Margin="8,0,0,0"
+                                    VerticalAlignment="Top"
+                                    ToolTip.Tip="Close"
+                                    Theme="{StaticResource SubtleIconButtonStyle}"
+                                    Command="{Binding $parent[ItemsControl].((toasts:ToastService)DataContext).DismissCommand}"
+                                    CommandParameter="{Binding}"
+                                    IsVisible="{Binding IsClosable}">
+                                <mi:MaterialIcon Kind="Close" Width="14" Height="14" />
+                            </Button>
+                        </Grid>
+                    </Border>
+                </Panel>
+            </DataTemplate>
+        </ItemsControl.ItemTemplate>
+    </ItemsControl>
+</UserControl>

@@ -1,0 +1,173 @@
+<UserControl x:Class="GD.SaveEditor.Presentation.Views.Waypoints.WaypointsView"
+             xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:waypointsVm="using:GD.SaveEditor.Presentation.ViewModels.Waypoints"
+             xmlns:mi="using:Material.Icons.Avalonia"
+             mc:Ignorable="d"
+             x:DataType="waypointsVm:WaypointsViewModel"
+             d:DesignHeight="700" d:DesignWidth="900">
+
+    <UserControl.Resources>
+        <ControlTheme x:Key="NoteTextStyle" TargetType="TextBlock">
+            <Setter Property="Margin" Value="0,8,0,0" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Foreground" Value="{DynamicResource WarningForegroundBrush}" />
+        </ControlTheme>
+
+        <!-- One waypoint: checked = unlocked in the selected difficulty; not saved changes in the accent color. -->
+        <DataTemplate x:Key="WaypointTemplate" DataType="waypointsVm:WaypointItemViewModel">
+            <CheckBox Margin="0,3,12,3"
+                      IsChecked="{Binding IsUnlocked, Mode=TwoWay}"
+                      IsEnabled="{Binding CanEdit}"
+                      ToolTip.Tip="{Binding ToolTip}"
+                      AutomationProperties.Name="{Binding Name}">
+                <TextBlock Classes="waypointName" Classes.changed="{Binding IsChanged}" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+            </CheckBox>
+        </DataTemplate>
+
+        <!-- A campaign: title, unlocked count, "Unlock all", then its waypoints in three columns. -->
+        <DataTemplate x:Key="CampaignTemplate" DataType="waypointsVm:WaypointCampaignViewModel">
+            <Border Margin="0,12,0,0"
+                    Padding="16,12"
+                    MinHeight="0"
+                    Theme="{StaticResource InventorySectionBorderStyle}">
+                <StackPanel>
+                    <DockPanel LastChildFill="False">
+                        <TextBlock DockPanel.Dock="Left"
+                                   VerticalAlignment="Center"
+                                   Text="{Binding Title}"
+                                   Theme="{StaticResource SectionHeaderTextStyle}" />
+                        <Border DockPanel.Dock="Left"
+                                Classes="countBadge"
+                                Classes.complete="{Binding IsComplete}"
+                                Margin="10,0,0,0"
+                                Theme="{StaticResource BadgeBorderStyle}"
+                                BorderBrush="{DynamicResource ControlBorderBrush}"
+                                IsVisible="{Binding HasWaypoints}">
+                            <TextBlock Text="{Binding CountText}" FontSize="11"
+                                       Foreground="{DynamicResource SecondaryForegroundBrush}" />
+                        </Border>
+                        <Button DockPanel.Dock="Right"
+                                MinWidth="0"
+                                MinHeight="26"
+                                Padding="10,2"
+                                Theme="{StaticResource DialogButtonStyle}"
+                                Command="{Binding UnlockAllCommand}"
+                                ToolTip.Tip="Unlock every waypoint of this campaign in the selected difficulty"
+                                AutomationProperties.Name="{Binding Title, StringFormat='Unlock all {0} waypoints'}"
+                                IsVisible="{Binding HasWaypoints}">
+                            <StackPanel Orientation="Horizontal">
+                                <mi:MaterialIcon Kind="LockOpenVariantOutline" Width="14" Height="14" />
+                                <TextBlock Text="Unlock all" Margin="6,0,0,0" FontSize="12" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                    </DockPanel>
+
+                    <ItemsControl Margin="0,10,0,0"
+                                  ItemsSource="{Binding Waypoints}"
+                                  ItemTemplate="{StaticResource WaypointTemplate}"
+                                  Focusable="False"
+                                  IsVisible="{Binding HasWaypoints}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <UniformGrid Columns="3" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                    </ItemsControl>
+
+                    <TextBlock Margin="0,8,0,0"
+                               Text="{Binding EmptyText}"
+                               Theme="{StaticResource SecondaryTextStyle}"
+                               IsVisible="{Binding !HasWaypoints}" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <UserControl.Styles>
+        <Style Selector="TextBlock.waypointName.changed">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+        <Style Selector="Border.countBadge.complete">
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+        </Style>
+        <Style Selector="Border.countBadge.complete TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+        </Style>
+    </UserControl.Styles>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="0,16,0,16">
+            <!-- ===== Difficulty, totals and the buttons for every campaign ===== -->
+            <Border Padding="16,12" MinHeight="0" Theme="{StaticResource InventorySectionBorderStyle}">
+                <StackPanel>
+                    <DockPanel LastChildFill="False">
+                        <TextBlock DockPanel.Dock="Left"
+                                   VerticalAlignment="Center"
+                                   Text="Waypoints"
+                                   Theme="{StaticResource SectionHeaderTextStyle}" />
+                        <!-- Puts every list back as the save file has it (shown while one is changed). -->
+                        <Button DockPanel.Dock="Right"
+                                Width="NaN"
+                                Theme="{StaticResource SubtleIconButtonStyle}"
+                                ToolTip.Tip="Undo all waypoint changes (every difficulty)"
+                                AutomationProperties.Name="Undo waypoint changes"
+                                Command="{Binding ResetAllCommand}"
+                                IsVisible="{Binding HasChanges}">
+                            <StackPanel Orientation="Horizontal" Margin="4,0">
+                                <mi:MaterialIcon Kind="Undo" Width="16" Height="16" Foreground="{DynamicResource AccentBrush}" />
+                                <TextBlock Text="Undo all" Margin="4,0,0,0" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource AccentBrush}" />
+                            </StackPanel>
+                        </Button>
+                    </DockPanel>
+
+                    <WrapPanel Margin="0,10,0,0">
+                        <ListBox Theme="{StaticResource PillListBoxStyle}"
+                                 AutomationProperties.Name="Difficulty"
+                                 ItemsSource="{Binding DifficultyOptions}"
+                                 SelectedItem="{Binding SelectedDifficulty}"
+                                 DisplayMemberBinding="{ReflectionBinding Label}"
+                                 ToolTip.Tip="Difficulty whose waypoints are shown (each difficulty has its own)" />
+                        <TextBlock Margin="12,0,0,0"
+                                   VerticalAlignment="Center"
+                                   Text="{Binding SummaryText}"
+                                   Theme="{StaticResource SecondaryTextStyle}" />
+                    </WrapPanel>
+
+                    <WrapPanel Margin="0,12,0,0">
+                        <Button Margin="0,0,8,0"
+                                Theme="{StaticResource AccentButtonStyle}"
+                                Command="{Binding UnlockAllInDifficultyCommand}"
+                                ToolTip.Tip="Unlock every waypoint of every campaign in the selected difficulty">
+                            <TextBlock Text="{Binding SelectedDifficulty.Label, StringFormat='Unlock all in {0}'}" />
+                        </Button>
+                        <Button Theme="{StaticResource DialogButtonStyle}"
+                                Command="{Binding UnlockAllEverywhereCommand}"
+                                Content="Unlock all in every difficulty"
+                                ToolTip.Tip="Unlock every waypoint of every campaign in Normal, Elite and Ultimate" />
+                    </WrapPanel>
+
+                    <TextBlock Text="{Binding StatusMessage}"
+                               Theme="{StaticResource NoteTextStyle}"
+                               IsVisible="{Binding HasStatusMessage}" />
+                    <TextBlock Text="{Binding DifficultyHint}"
+                               Theme="{StaticResource NoteTextStyle}"
+                               IsVisible="{Binding HasDifficultyHint}" />
+                    <TextBlock Text="{Binding UnknownText}"
+                               Theme="{StaticResource NoteTextStyle}"
+                               Foreground="{DynamicResource SecondaryForegroundBrush}"
+                               IsVisible="{Binding HasUnknown}" />
+                </StackPanel>
+            </Border>
+
+            <!-- ===== One card per campaign ===== -->
+            <ItemsControl ItemsSource="{Binding Campaigns}"
+                          ItemTemplate="{StaticResource CampaignTemplate}"
+                          Focusable="False" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

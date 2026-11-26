@@ -1,0 +1,161 @@
+<!--
+    Look of the item grids (the bags of the inventory and the stash tabs): the game's near-black cells with thin golden
+    lines, the drop preview colors and the template of an item on a grid.
+-->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:charactersVm="using:GD.SaveEditor.Presentation.ViewModels.Characters"
+                    xmlns:inventoryVm="using:GD.SaveEditor.Presentation.ViewModels.Inventory">
+
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="avares://GD.SaveEditor/Presentation/Views/Characters/ItemResources.axaml" />
+    </ResourceDictionary.MergedDictionaries>
+
+    <!-- Colors of the game's inventory: near-black cells with thin golden lines. -->
+    <SolidColorBrush x:Key="BagFrameBrush" Color="#5A4B2C" />
+    <SolidColorBrush x:Key="BagGoldBrush" Color="#D9B45A" />
+    <SolidColorBrush x:Key="BagHeaderBrush" Color="#221D17" />
+    <SolidColorBrush x:Key="DropValidBrush" Color="#404CE03C" />
+    <SolidColorBrush x:Key="DropValidBorderBrush" Color="#4CE03C" />
+    <SolidColorBrush x:Key="DropInvalidBrush" Color="#40F1707B" />
+    <SolidColorBrush x:Key="DropInvalidBorderBrush" Color="#F1707B" />
+
+    <!-- One 32 x 32 cell, tiled over the bag. -->
+    <DrawingBrush x:Key="BagCellBrush"
+                  TileMode="Tile"
+                  Stretch="None"
+                  SourceRect="0,0,32,32"
+                  DestinationRect="0,0,32,32">
+        <DrawingBrush.Drawing>
+            <GeometryDrawing Brush="#0E0D0C">
+                <GeometryDrawing.Pen>
+                    <Pen Brush="#3D3523" Thickness="1" />
+                </GeometryDrawing.Pen>
+                <GeometryDrawing.Geometry>
+                    <RectangleGeometry Rect="0,0,32,32" />
+                </GeometryDrawing.Geometry>
+            </GeometryDrawing>
+        </DrawingBrush.Drawing>
+    </DrawingBrush>
+
+    <!--
+        An item in a bag: icon over a glow of its rarity, the stack size in the bottom-right corner, the game's
+        tooltip. Without an icon (database or Items.arc missing) the item name is shown. The stack size has a
+        one-pixel black shadow drawn as a second text (cheaper than a blur effect on every item).
+    -->
+    <DataTemplate x:Key="BagItemTemplate" DataType="charactersVm:EquipmentSlotViewModel">
+        <Border Margin="1"
+                BorderThickness="1"
+                BorderBrush="{Binding Rarity, Converter={StaticResource RarityBrush}}"
+                Background="{Binding Rarity, Converter={StaticResource RarityBrush}, ConverterParameter=Glow}"
+                ToolTip.ShowDelay="150">
+            <ToolTip.Tip>
+                <ToolTip Theme="{StaticResource ItemToolTipTheme}"
+                         Content="{Binding}"
+                         BorderBrush="{Binding Rarity, Converter={StaticResource RarityBrush}}" />
+            </ToolTip.Tip>
+            <Panel ClipToBounds="True">
+                <Image Source="{Binding Icon}"
+                       Stretch="Uniform"
+                       StretchDirection="DownOnly"
+                       RenderOptions.BitmapInterpolationMode="HighQuality"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center" />
+
+                <TextBlock Text="{Binding Name}"
+                           IsVisible="{Binding !HasIcon}"
+                           Margin="1"
+                           FontSize="8"
+                           TextAlignment="Center"
+                           TextWrapping="Wrap"
+                           TextTrimming="CharacterEllipsis"
+                           VerticalAlignment="Center"
+                           Foreground="{Binding Rarity, Converter={StaticResource RarityBrush}}" />
+
+                <TextBlock Text="{Binding QuantityText}"
+                           Margin="0,0,1,-1"
+                           FontSize="11"
+                           FontWeight="SemiBold"
+                           HorizontalAlignment="Right"
+                           VerticalAlignment="Bottom"
+                           Foreground="Black"
+                           Theme="{StaticResource OptionalTooltipText}" />
+                <TextBlock Text="{Binding QuantityText}"
+                           Margin="0,0,2,0"
+                           FontSize="11"
+                           FontWeight="SemiBold"
+                           HorizontalAlignment="Right"
+                           VerticalAlignment="Bottom"
+                           Foreground="White"
+                           Theme="{StaticResource OptionalTooltipText}" />
+            </Panel>
+        </Border>
+    </DataTemplate>
+
+    <!-- Places an item of a bag on the bag's canvas (the container of each item of the bag's ItemsControl). -->
+    <ControlTheme x:Key="BagItemContainerTheme" TargetType="ContentPresenter" x:DataType="inventoryVm:InventoryItemViewModel">
+        <Setter Property="Canvas.Left" Value="{Binding Left}" />
+        <Setter Property="Canvas.Top" Value="{Binding Top}" />
+    </ControlTheme>
+
+    <!--
+        A bag: the cell grid with its items placed on it by cell. Items are dragged by the mouse; while one is over the
+        bag, the cells it would cover are shown green (it fits) or red (outside the bag or over another item). A click
+        on an item opens the item inspector next to it; a right-click on a free cell offers to build a new item of a
+        kind there, on an item to change or remove it (all handled by ItemGridView, which finds the parts by their
+        classes: bagGrid, bagItem).
+    -->
+    <DataTemplate x:Key="BagGridTemplate" DataType="inventoryVm:InventoryBagViewModel">
+        <Border HorizontalAlignment="Left"
+                VerticalAlignment="Top"
+                BorderThickness="1"
+                BorderBrush="{StaticResource BagFrameBrush}">
+            <Panel Classes="bagGrid"
+                   Width="{Binding PixelWidth}"
+                   Height="{Binding PixelHeight}"
+                   Background="{StaticResource BagCellBrush}">
+                <ItemsControl ItemsSource="{Binding Items}"
+                              Focusable="False"
+                              ItemContainerTheme="{StaticResource BagItemContainerTheme}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <Canvas />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="inventoryVm:InventoryItemViewModel">
+                            <ContentControl Classes="bagItem"
+                                            Classes.sizeKnown="{Binding IsSizeKnown}"
+                                            Classes.dragging="{Binding IsDragging}"
+                                            Width="{Binding Width}"
+                                            Height="{Binding Height}"
+                                            Focusable="False"
+                                            Content="{Binding Item}"
+                                            ContentTemplate="{StaticResource BagItemTemplate}" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- Drop preview: the cells the dragged item would cover. -->
+                <Canvas IsHitTestVisible="False">
+                    <Border Classes="dropPreview"
+                            Classes.valid="{Binding IsPreviewValid}"
+                            Canvas.Left="{Binding PreviewLeft}"
+                            Canvas.Top="{Binding PreviewTop}"
+                            Width="{Binding PreviewWidth}"
+                            Height="{Binding PreviewHeight}"
+                            BorderThickness="1"
+                            IsVisible="{Binding IsPreviewVisible}" />
+                </Canvas>
+
+                <TextBlock Text="Empty"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           FontSize="12"
+                           Foreground="{StaticResource SlotLabelBrush}"
+                           IsHitTestVisible="False"
+                           IsVisible="{Binding IsEmpty}" />
+            </Panel>
+        </Border>
+    </DataTemplate>
+</ResourceDictionary>
