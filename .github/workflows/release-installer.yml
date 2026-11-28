@@ -1,7 +1,8 @@
 name: Release - Windows, Linux and macOS
 
 # Runs every time a pull request is MERGED into the `release` branch.
-# Builds self-contained publishes for Windows (Inno Setup installer), Linux (tar.gz)
+# First runs every test (GD.SaveEditor.Tests); nothing is built or released unless all of them pass.
+# Then builds self-contained publishes for Windows (Inno Setup installer), Linux (tar.gz)
 # and macOS (Intel and Apple silicon .app bundles in tar.gz, which keeps the execute bits)
 # and publishes one GitHub Release (shown in the "Releases" panel of the repo page)
 # with all of them attached. The newest run is marked as "Latest".
@@ -20,15 +21,58 @@ concurrency:
 
 env:
   PROJECT: GD.SaveEditor/GD.SaveEditor/GD.SaveEditor.csproj
+  TEST_PROJECT: GD.SaveEditor/GD.SaveEditor.Tests/GD.SaveEditor.Tests.csproj
   CONFIGURATION: Release
   APP_NAME: GD.SaveEditor
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
 
 jobs:
-  version:
-    # Skip PRs that were closed without merging.
+  test:
+    # Skip PRs that were closed without merging. Every other job needs this one, so they are skipped too.
     if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout merged commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Restore
+        run: dotnet restore ${{ env.TEST_PROJECT }}
+
+      - name: Run tests
+        run: >
+          dotnet test ${{ env.TEST_PROJECT }}
+          -c ${{ env.CONFIGURATION }}
+          --no-restore
+          --logger "trx;LogFileName=test-results.trx"
+          --results-directory test-results
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: test-results
+          if-no-files-found: ignore
+
+  version:
+    # Nothing is built unless every test passed.
+    needs: test
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
